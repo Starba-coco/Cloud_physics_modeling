@@ -24,12 +24,16 @@ program adiabatic_box_model
 
         if (w > 5.0) w = 5.0
 
-        call adiabatic_process(z, T, p, rho, w, dt)
+        ! 상태 업데이트 서브루틴 호출
+        call update_state(z, T, p, rho, w, dt)
 
+        ! 화면에 출력
         print *, 'Time:', time, 'Temperature:', T
 
+        ! 결과를 파일에 저장하는 서브루틴 호출
         call write_results(unit_num, time, T, p, rho, z)
     end do
 
+    ! 파일 닫기
     close(unit=unit_num)
 end program adiabatic_box_model
