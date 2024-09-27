@@ -1,6 +1,6 @@
 subroutine open_file(unit_num, filename)
     implicit none
-    integer, intent(in) :: unit_num
+    integer,          intent(in) :: unit_num
     character(len=*), intent(in) :: filename
 
     ! 파일 열기
