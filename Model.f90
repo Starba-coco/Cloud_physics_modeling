@@ -9,31 +9,25 @@ program adiabatic_box_model
     
     namelist /input_params/ w_time, w_vals
 
-    ! 배열 초기화
     w_time = 0.0
     w_vals = 0.0
+    z      = z0
+    T      = T0
+    p      = p0
+    dt     = 1.0
+    time   = 0.0
 
-    z    = z0
-    T    = T0
-    p    = p0
-    dt   = 1.0
-    time = 0.0
-
-    ! 파일 열기
     unit_num = 10
     call open_file(unit_num, 'results.txt')
 
-    ! namelist 파일에서 값 읽기
     open(unit=20, file='./input.nml', status='old')
     read(20, input_params)
     close(20)
 
     do
         time = time + dt
-
         if (time > i_time) exit
 
-        ! 시간에 따른 w 값 설정
         if (time <= w_time(1)) then
             w = w_vals(1)
         else if (time <= w_time(2)) then
