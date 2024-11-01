@@ -4,7 +4,6 @@ program adiabatic_bin_model
 
     ! ============================================================
     ! 상수 및 파라미터 선언
-    integer, parameter   :: max_size = 10
     integer              :: i, i_vant
     
     ! 시간 및 공간 변수
@@ -16,17 +15,14 @@ program adiabatic_bin_model
     
     ! 분포 함수 및 에어로졸 특성 변수
     real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:)
-    real(8), allocatable :: m_s(:)
     real(8)              :: rs, rc, Sc, pdf_value, dr, total_drops, activated_drops
     
     ! 출력 파일 관련 변수
-    character(len=100)   :: output_file
     character(len=20)    :: aerosol_type
     integer              :: dist_unit
     
     ! 에어로졸 직경 관련 변수
     real(8)              :: diameter_nm, dlogD, y_value
-    real(8)              :: logD_i, logD_ip1
     ! ============================================================
     namelist /input_params/ aerosol_type, w
     ! ============================================================
@@ -38,7 +34,6 @@ program adiabatic_bin_model
     p            = p0
     rho          = p0 / (R_gas * T)
     q            = qv0
-    ! w            = w_vals(1)
     aerosol_type = 'NaCl'
     ! ============================================================
 
@@ -51,9 +46,8 @@ program adiabatic_bin_model
     allocate(r_center(nbin))
     allocate(n_bin(nbin))
     allocate(log_r(nbin+1))
-    allocate(m_s(nbin))
     
-    ! 에어로졸 특성 설정
+    ! 에어로졸 설정
     call set_aerosol(aerosol_type, Ms, rho_s, i_vant)
     
     ! bin 경계 계산
@@ -85,7 +79,7 @@ program adiabatic_bin_model
     dist_unit = 20
     open(dist_unit, file='distribution.txt', status='unknown', action='write')
     
-    ! 분포 데이터 파일 헤더 작성
+    ! 헤더
     write(dist_unit, '(A)') 'Diameter(nm)    dN/dlogD * 1e-3 (cm^-3/nm)'
     
     ! dlogD 계산 (상수로 계산)
@@ -96,29 +90,28 @@ program adiabatic_bin_model
         ! 입자 지름 계산 (nm)
         diameter_nm = 2.0d0 * r_center(i) * 1.0d9
     
-        ! dN/dlogD 계산 및 단위 변환
-        y_value = (n_bin(i) / dlogD) * 1.0d-9  ! [cm^-3/nm], 1e-9 = 1e-6(m^-3 -> cm^-3) * 1e-3
+        y_value = (n_bin(i) / dlogD) * 1.0d-9
     
         write(dist_unit, '(E12.5, 3X, E12.5)') diameter_nm, y_value
     end do
     
-    close(dist_unit)  ! 분포 데이터 파일 닫기
+    close(dist_unit)
     
     ! 결과 출력 파일 설정
     open(10, file='output.txt', status='unknown', action='write')
     
-    ! 헤더 작성
+    ! 헤더
     write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Activated Drops'
     
-    ! 단열 상승 과정 시뮬레이션
+    ! 단열 상승 과정
     do
         time = time + dt
         if (time > i_time) exit
     
-        ! 단열 과정 계산
+        ! 단열 상승
         call adiabatic_process(z, T, p, rho, w, dt, q, S)
     
-        ! 코퓰라 상수 계산 (온도 의존)
+        ! kohler constants
         a = (2.0d0 * sigma_v) / (Rv * rho_w * T)
         b = (rho_s * Mw)      / (Ms * rho_w)
     
@@ -144,14 +137,13 @@ program adiabatic_bin_model
                time, w, T, p, z, (S + 1.0d0) * 100.0d0, activated_drops
     end do
     
-    close(10)  ! 결과 출력 파일 닫기
+    close(10)
     
     ! 메모리 해제
     deallocate(r)
     deallocate(r_center)
     deallocate(n_bin)
     deallocate(log_r)
-    deallocate(m_s)
     
 
 end program adiabatic_bin_model

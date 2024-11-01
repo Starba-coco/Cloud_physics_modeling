@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the data from the file
-data = pd.read_csv('/home/dmafytn89/study/Cloud_physics_modeling/Week4/output.txt', delim_whitespace=True)
+data = pd.read_csv('/home/dmafytn89/study/Cloud_physics_modeling/Week5/output.txt', delim_whitespace=True)
 
 # Extract Time and Activated Drops columns
 time            = data['Time(s)']
@@ -20,3 +20,4 @@ plt.grid(True)
 plt.show()
 
 # %%
+

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Read data from file
-data = np.loadtxt('/home/dmafytn89/study/Cloud_physics_modeling/Week4/distribution.txt', skiprows=1)
+data = np.loadtxt('/home/dmafytn89/study/Cloud_physics_modeling/Week5/distribution.txt', skiprows=1)
 
 # Extract diameter and y_value
 diameter_nm = data[:, 0]

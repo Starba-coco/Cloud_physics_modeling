@@ -27,9 +27,6 @@ module constants
     real(8),    parameter :: rho_w   = 1000.0d0               ! 물의 밀도      (kg/m^3)
     real(8),    parameter :: sigma_v = 0.0728d0               ! 물의 표면 장력 (J/m^2)
 
-    ! 로그 정규 분포 파라미터 (세 개의 모드)
-    integer,    parameter :: n_modes = 3                      ! 모드의 수
-
     ! 모드 1
     real(8),    parameter :: N0_val_1  = 8.5E9                ! 수농도 (#/m^3)
     real(8),    parameter :: rm_val_1  = 3.65D-9              ! 기하 평균 반경 (m)
