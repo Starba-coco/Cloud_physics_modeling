@@ -26,11 +26,33 @@ subroutine lognormal(r, pdf_value)
     implicit none
     real(8), intent(in)  :: r
     real(8), intent(out) :: pdf_value
-    real(8)              :: term1, term2
+    real(8)              :: term1, term2, pdf_i, total_pdf
+    integer              :: i
 
-    term1     = - (log(r / rm))**2 / (2.0d0 * (sigma**2))
-    term2     = (r * sigma * sqrt(2.0d0 * pi))
-    pdf_value = (1.0d0 / term2) * exp(term1)  ! 로그 정규 분포 계산
+    total_pdf = 0.0d0
+
+    ! 모드 1
+    term1     = - (log(r / rm_val_1))**2 / (2.0d0 * (log(sig_val_1))**2)
+    term2     = r * log(sig_val_1) * sqrt(2.0d0 * pi)
+    pdf_i     = (1.0d0 / term2) * exp(term1)
+    pdf_i     = N0_val_1 * pdf_i
+    total_pdf = total_pdf + pdf_i
+
+    ! 모드 2
+    term1     = - (log(r / rm_val_2))**2 / (2.0d0 * (log(sig_val_2))**2)
+    term2     = r * log(sig_val_2) * sqrt(2.0d0 * pi)
+    pdf_i     = (1.0d0 / term2) * exp(term1)
+    pdf_i     = N0_val_2 * pdf_i
+    total_pdf = total_pdf + pdf_i
+
+    ! 모드 3
+    term1     = - (log(r / rm_val_3))**2 / (2.0d0 * (log(sig_val_3))**2)
+    term2     = r * log(sig_val_3) * sqrt(2.0d0 * pi)
+    pdf_i     = (1.0d0 / term2) * exp(term1)
+    pdf_i     = N0_val_3 * pdf_i
+    total_pdf = total_pdf + pdf_i
+
+    pdf_value = total_pdf
 
 end subroutine lognormal
 
@@ -41,7 +63,7 @@ subroutine set_aerosol(aerosol_type, Ms, rho_s, i_vant)
     real(8),          intent(out) :: Ms, rho_s
     integer(8),       intent(out) :: i_vant
 
-    select case (trim(aerosol_type))
+    select case (trim(adjustl(aerosol_type)))
         case ('NaCl')
             Ms     = 58.44d-3    ! kg/mol
             rho_s  = 2160.0d0    ! kg/m³
@@ -56,7 +78,7 @@ subroutine set_aerosol(aerosol_type, Ms, rho_s, i_vant)
             i_vant = 2
         ! 필요한 경우 더 많은 에어로졸 추가
         case default
-            print *, 'Unknown Aerosol. Proceeding with default Aerosol(NaCl)'
+            print *, 'Error: Unknown Aerosol Type "', trim(adjustl(aerosol_type)), '". Using default Aerosol (NaCl).'
             Ms     = 58.44d-3    ! kg/mol
             rho_s  = 2160.0d0    ! kg/m³
             i_vant = 2

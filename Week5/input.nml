@@ -1,0 +1,4 @@
+&input_params
+    aerosol_type = 'buritto'
+    w            = 1.0d0
+/
