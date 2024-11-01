@@ -84,3 +84,20 @@ subroutine set_aerosol(aerosol_type, Ms, rho_s, i_vant)
             i_vant = 2
     end select
 end subroutine set_aerosol
+
+subroutine update_saturation(p, T, qv, S)
+    use constants
+    implicit none
+    real(8), intent(in)    :: p, T, qv
+    real(8), intent(out)   :: S
+    real(8)                :: e_s, qs
+
+    ! 포화 수증기 압력 계산
+    e_s = 610.94d0 * exp(17.625d0 * (T - 273.15d0) / (T - 30.11d0))
+
+    ! 포화 혼합비 계산
+    qs = epsilon * e_s / (p - e_s)
+
+    ! 과포화도 계산
+    S = qv / qs - 1.0d0
+end subroutine update_saturation

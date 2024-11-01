@@ -5,17 +5,19 @@ program adiabatic_bin_model
     ! ============================================================
     ! 상수 및 파라미터 선언
     integer              :: i, i_vant
-    
+
     ! 시간 및 공간 변수
     real(8)              :: dt, time, z
     
     ! 물리적 상수 및 초기 상태
     real(8)              :: delta_logr, log_rmin, log_rmax
-    real(8)              :: a, b, Ms, rho_s, q, S, w, w_vals, T, p, rho
+    real(8)              :: a, b, Ms, rho_s, q, S, w, T, p, rho
     
     ! 분포 함수 및 에어로졸 특성 변수
     real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:)
     real(8)              :: rs, rc, Sc, pdf_value, dr, total_drops, activated_drops
+    real(8)              :: delta_qv, n_activated
+    real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin
     
     ! 출력 파일 관련 변수
     character(len=20)    :: aerosol_type
@@ -24,6 +26,7 @@ program adiabatic_bin_model
     ! 에어로졸 직경 관련 변수
     real(8)              :: diameter_nm, dlogD, y_value
     ! ============================================================
+    
     namelist /input_params/ aerosol_type, w
     ! ============================================================
     ! 변수 초기화
@@ -33,8 +36,8 @@ program adiabatic_bin_model
     T            = T0
     p            = p0
     rho          = p0 / (R_gas * T)
-    q            = qv0
     aerosol_type = 'NaCl'
+    q            = qv0
     ! ============================================================
 
     open(unit=15, file='input.nml', status='old', action='read')
@@ -74,7 +77,7 @@ program adiabatic_bin_model
         n_bin(i)    = pdf_value * dr
         total_drops = total_drops + n_bin(i)
     end do
-    
+
     ! 분포 데이터를 출력하기 위한 파일 설정
     dist_unit = 20
     open(dist_unit, file='distribution.txt', status='unknown', action='write')
@@ -101,23 +104,24 @@ program adiabatic_bin_model
     open(10, file='output.txt', status='unknown', action='write')
     
     ! 헤더
-    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Activated Drops'
+    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Activated Drops, q'
     
-    ! 단열 상승 과정
+! 단열 상승 과정
     do
         time = time + dt
         if (time > i_time) exit
     
-        ! 단열 상승
+        ! 단열 과정
         call adiabatic_process(z, T, p, rho, w, dt, q, S)
     
-        ! kohler constants
+        ! kohler 상수 계산 (온도 의존)
         a = (2.0d0 * sigma_v) / (Rv * rho_w * T)
         b = (rho_s * Mw)      / (Ms * rho_w)
     
         activated_drops = 0.0d0
+        delta_qv        = 0.0d0
     
-        ! 각 bin에 대해 임계 반경과 임계 과포화도 계산 및 활성화 여부 판단
+        ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
         do i = 1, nbin
             rs = r_center(i)
     
@@ -126,15 +130,38 @@ program adiabatic_bin_model
             ! 임계 과포화도 계산
             Sc = exp( (a / rc) - (b * rc**3) / rs**3 )
     
-            ! 현재 과포화도와 비교하여 활성화 여부 판단
+            ! 활성화 여부 판단
             if (S >= (Sc - 1.0d0)) then
-                activated_drops = activated_drops + n_bin(i)
+                ! 활성화된 입자의 수
+                n_activated = n_bin(i)
+                activated_drops = activated_drops + n_activated
+    
+                ! 응결된 물의 부피 계산
+                delta_volume = (4.0d0 / 3.0d0) * pi * (rc**3 - rs**3)
+    
+                ! 개별 입자당 응결된 물의 질량
+                delta_mass_per_particle = delta_volume * rho_w
+    
+                ! 해당 bin에서 응결된 물의 총 질량
+                delta_mass_bin = n_activated * delta_mass_per_particle
+    
+                ! 총 응결된 물의 질량에 합산
+                delta_qv = delta_qv + delta_mass_bin
             end if
         end do
     
+        ! 수증기 혼합비 업데이트 (kg/kg)
+        q = q - delta_qv
+    
+        ! q가 음수가 되지 않도록 체크
+        if (q < 0.0d0) q = 0.0d0
+    
+        ! 상대 습도 및 과포화도 업데이트
+        call update_saturation(p, T, q, S)
+    
         ! 결과 출력 (파일로 쓰기)
-        write(10, '(F7.2, 3X, F6.2, 3X, F10.2, 3X, F10.2, 3X, F8.2, 3X, F6.2, 5X, E12.4)') &
-               time, w, T, p, z, (S + 1.0d0) * 100.0d0, activated_drops
+        write(10, '(F7.2, 3X, F6.2, 3X, F10.2, 3X, F10.2, 3X, F8.2, 3X, F6.2, 3X, E12.4, 3X, F10.6)') &
+        time, w, T, p, z, (S + 1.0d0) * 100.0d0, activated_drops, q
     end do
     
     close(10)
