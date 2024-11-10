@@ -21,6 +21,30 @@ subroutine adiabatic_process(z, T, p, rho, w, dt, q, S)
 
 end subroutine adiabatic_process
 
+subroutine cal_bin(r, r_center, log_r)
+    use constants
+    implicit none
+    ! 변수 선언
+    real(8), intent(out) :: r(nbin+1), r_center(nbin), log_r(nbin+1)
+    real(8)              :: log_rmin, log_rmax, delta_logr
+    integer              :: i
+
+    ! bin 경계 계산
+    log_rmin   = log(rmin)
+    log_rmax   = log(rmax)
+    delta_logr = (log_rmax - log_rmin) / nbin
+
+    do i = 1, nbin + 1
+        log_r(i) = log_rmin + (i - 1) * delta_logr
+        r(i)     = exp(log_r(i))
+    end do
+
+    ! bin 중심 계산 (기하 평균)
+    do i = 1, nbin
+        r_center(i) = sqrt(r(i) * r(i + 1))
+    end do
+end subroutine cal_bin
+
 subroutine lognormal(r, pdf_value)
     use constants
     implicit none
