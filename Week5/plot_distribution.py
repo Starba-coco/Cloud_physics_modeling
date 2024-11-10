@@ -16,8 +16,8 @@ plt.xlabel('Diameter (nm)')
 plt.ylabel(r'$dN/d\log D$ (cm$^{-3}$)')
 plt.title('Particle Size Distribution')
 plt.xscale('log')
-plt.ylim(0, 18)   # Set y-axis limits from 0 to 18
-plt.xlim(1, 1000) # Set x-axis limits from 1 to 1000 nm
+plt.ylim(0, 18) 
+plt.xlim(1, 1000)
 plt.grid(True, which="both", ls="--")
 plt.tight_layout()
 plt.show()

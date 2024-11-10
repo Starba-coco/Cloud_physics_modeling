@@ -12,7 +12,7 @@ subroutine adiabatic_process(z, T, p, rho, w, dt, q, S)
     T         = T - (g / cp) * dz                                      ! 온도 업데이트
     dp        = -rho * g * dz                                          ! 압력 업데이트
     p         = p + dp
-    rho       = p / (R_gas * T)                                        ! 밀도 업데이트
+    rho       = p / (R_dry * T)                                        ! 밀도 업데이트
     e         = p * q / (epsilon + q * (1.0d0 - epsilon))              ! 수증기 압력 계산
     T_Celsius = T - 273.15d0
     e_s       = 6.112d0 * exp((17.67d0 * T_Celsius) / (T_Celsius + 243.5d0)) ! 포화 수증기 압력 계산
@@ -21,19 +21,15 @@ subroutine adiabatic_process(z, T, p, rho, w, dt, q, S)
 
 end subroutine adiabatic_process
 
-subroutine cal_bin(r, r_center, log_r)
+subroutine cal_bin(r, r_center, log_r, log_rmin, delta_logr)
     use constants
     implicit none
     ! 변수 선언
     real(8), intent(out) :: r(nbin+1), r_center(nbin), log_r(nbin+1)
-    real(8)              :: log_rmin, log_rmax, delta_logr
+    real(8), intent(in)  :: log_rmin, delta_logr
     integer              :: i
 
     ! bin 경계 계산
-    log_rmin   = log(rmin)
-    log_rmax   = log(rmax)
-    delta_logr = (log_rmax - log_rmin) / nbin
-
     do i = 1, nbin + 1
         log_r(i) = log_rmin + (i - 1) * delta_logr
         r(i)     = exp(log_r(i))
@@ -108,6 +104,37 @@ subroutine set_aerosol(aerosol_type, Ms, rho_s, i_vant)
             i_vant = 2
     end select
 end subroutine set_aerosol
+
+subroutine write_distribution(nbin, r_center, n_bin, delta_logr)
+    implicit none
+    integer, intent(in)    :: nbin
+    real(8), intent(in)    :: r_center(nbin), n_bin(nbin), delta_logr
+    integer                :: i, dist_unit
+    real(8)                :: dlogD, diameter_nm, y_value
+
+    ! 분포 데이터를 출력하기 위한 파일 설정
+    dist_unit = 20
+    open(dist_unit, file='distribution.txt', status='unknown', action='write')
+
+    ! 헤더
+    write(dist_unit, '(A)') 'Diameter(nm)    dN/dlogD * 1e-3 (cm^-3/nm)'
+
+    ! dlogD 계산 (상수로 계산)
+    dlogD = delta_logr / log(10.0d0)  ! ln(10)으로 나누어 log10 기반으로 변환
+
+    ! 분포 데이터를 파일에 출력
+    do i = 1, nbin
+        ! 입자 지름 계산 (nm)
+        diameter_nm = 2.0d0 * r_center(i) * 1.0d9
+
+        y_value = (n_bin(i) / dlogD) * 1.0d-9
+
+        write(dist_unit, '(E12.5, 3X, E12.5)') diameter_nm, y_value
+    end do
+
+    close(dist_unit)
+end subroutine write_distribution
+
 
 subroutine update_saturation(p, T, qv, S)
     use constants

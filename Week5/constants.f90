@@ -3,18 +3,10 @@ module constants
 
     ! 물리 상수
     real(8),    parameter :: g       = 9.80665d0              ! 중력 가속도        (m/s^2)
-    real(8),    parameter :: R_gas   = 287.058d0              ! 건조 공기 기체 상수 (J/kg·K)
+    real(8),    parameter :: R_dry   = 287.058d0              ! 건조 공기 기체 상수 (J/kg·K)
     real(8),    parameter :: cp      = 1005.0d0               ! 공기의 비열        (J/kg·K)
-    real(8),    parameter :: T0      = 300.0d0                ! 초기 온도          (K)
-    real(8),    parameter :: z0      = 0.0d0                  ! 초기 고도          (m)
-    real(8),    parameter :: p0      = 102400.0d0             ! 초기 압력          (Pa)
-    real(8),    parameter :: i_time  = 3600.0d0               ! 적분 시간          (s)
-    real(8),    parameter :: rmin    = 1.00D-09               ! Drop의 최소 크기   (m)
-    real(8),    parameter :: rmax    = 1.00D-04               ! Drop의 최대 크기   (m)
-    real(8),    parameter :: pi      = 4.0d0 * atan(1.0d0)    ! 파이
-
-    real(8),    parameter :: qv0     = 0.01093d0              ! 초기 수증기 혼합비  (kg/kg)
-    integer(8), parameter :: nbin    = 300                    ! bin의 개수 증가 (#)
+    real(8),    parameter :: pi      = 4.0d0 * atan(1.0d0)    ! 파이          ! 초기 수증기 혼합비  (kg/kg)
+    integer(8), parameter :: nbin    = 300                    ! bin의 개수 (#)
 
     ! 수증기 및 공기의 특성
     real(8),    parameter :: Mv      = 18.01528d-3            ! 수증기 몰 질량      (kg/mol)

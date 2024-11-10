@@ -3,11 +3,11 @@ program adiabatic_bin_model
     implicit none
 
     ! ============================================================
-    ! 상수 및 파라미터 선언
+    ! 변수 선언
     integer              :: i, i_vant
 
     ! 시간 및 공간 변수
-    real(8)              :: dt, time, z
+    real(8)              :: dt, time, z, i_time
 
     ! 물리적 상수 및 초기 상태
     real(8)              :: a, b, Ms, rho_s, q, S, w, T, p, rho
@@ -27,24 +27,28 @@ program adiabatic_bin_model
 
     ! 추가된 변수 선언
     real(8)              :: log_rmin, log_rmax, delta_logr
+    real(8)              :: rmin, rmax
+    real(8)              :: qv
     ! ============================================================
 
-    namelist /input_params/ aerosol_type, w
+    ! namelist에서 읽을 변수 선언
+    namelist /input_params/ aerosol_type, w, T, z, p, i_time, rmin, rmax, qv
     ! ============================================================
     ! 변수 초기화
     dt           = 1.0d0
     time         = 0.0d0
-    z            = z0
-    T            = T0
-    p            = p0
-    rho          = p0 / (R_gas * T)
-    aerosol_type = 'NaCl'
-    q            = qv0
+    aerosol_type = 'NaCl'   ! 기본값 설정
+
     ! ============================================================
 
+    ! namelist 파일에서 변수 읽기
     open(unit=15, file='input.nml', status='old', action='read')
     read(15, nml=input_params)
     close(15)
+
+    ! namelist에서 읽은 변수들을 사용하여 초기화
+    rho = p / (R_dry * T)
+    q   = qv
 
     ! bin_model 계산을 위한 배열 할당
     allocate(r(nbin+1))
@@ -56,7 +60,7 @@ program adiabatic_bin_model
     log_rmin   = log(rmin)
     log_rmax   = log(rmax)
     delta_logr = (log_rmax - log_rmin) / nbin
-    
+
     ! 에어로졸 설정
     call set_aerosol(aerosol_type, Ms, rho_s, i_vant)
     call cal_bin(r, r_center, log_r, log_rmin, delta_logr)
@@ -71,33 +75,13 @@ program adiabatic_bin_model
         total_drops = total_drops + n_bin(i)
     end do
 
-    ! 분포 데이터를 출력하기 위한 파일 설정
-    dist_unit = 20
-    open(dist_unit, file='distribution.txt', status='unknown', action='write')
-    
-    ! 헤더
-    write(dist_unit, '(A)') 'Diameter(nm)    dN/dlogD * 1e-3 (cm^-3/nm)'
-    
-    ! dlogD 계산 (상수로 계산)
-    dlogD = delta_logr / log(10.0d0)  ! ln(10)으로 나누어 log10 기반으로 변환
-
-    ! 분포 데이터를 파일에 출력
-    do i = 1, nbin
-        ! 입자 지름 계산 (nm)
-        diameter_nm = 2.0d0 * r_center(i) * 1.0d9
-
-        y_value = (n_bin(i) / dlogD) * 1.0d-9
-
-        write(dist_unit, '(E12.5, 3X, E12.5)') diameter_nm, y_value
-    end do
-
-    close(dist_unit)
+    call write_distribution(nbin, r_center, n_bin, delta_logr)
 
     ! 결과 출력 파일 설정
     open(10, file='output.txt', status='unknown', action='write')
 
     ! 헤더
-    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Activated Drops, q'
+    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Activated_Drops, q'
 
     ! 단열 상승 과정
     do
@@ -123,9 +107,9 @@ program adiabatic_bin_model
 
             ! 임계 과포화도 계산
             Sc = sqrt((4 * (a**3) / (27 * b * rs**3)))
-            
+
             ! 활성화 여부 판단
-            if (S >= (Sc)) then
+            if (S >= Sc) then
                 ! 활성화된 입자의 수
                 n_activated = n_bin(i)
                 activated_drops = activated_drops + n_activated
@@ -153,7 +137,7 @@ program adiabatic_bin_model
         call update_saturation(p, T, q, S)
 
         ! 결과 출력 (파일로 쓰기)
-        write(10, '(F7.2, 3X, F6.2, 3X, F10.2, 3X, F10.2, 3X, F8.2, 3X, E12.4, 3X, F10.6)') &
+        write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
         time, w, T, p, z, (S + 1.0d0) * 100.0d0, activated_drops, q
     end do
 
