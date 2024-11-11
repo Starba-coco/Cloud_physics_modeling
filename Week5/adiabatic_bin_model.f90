@@ -97,36 +97,32 @@ program adiabatic_bin_model
 
         activated_drops = 0.0d0
         delta_qv        = 0.0d0
-
+        
         ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
         do i = 1, nbin
             rs = r_center(i)
-
-            ! 임계 반경 계산
-            rc = ( (a * rs**3) / (3.0d0 * b) ) ** 0.25d0
-
+        
             ! 임계 과포화도 계산
-            Sc = sqrt((4 * (a**3) / (27 * b * rs**3)))
+            Sc = sqrt((4.0d0 * (a**3)) / (27.0d0 * b * rs**3))
+        
+            ! 임계 반경 계산
+            ! rc = ( (a * rs**3) / (3.0d0 * b) ) ** 0.25d0
+            rc = ((a / 3.0d0) / (4.0d0 * b * (Sc**2))) ** (1.0d0 / 3.0d0)
 
             ! 활성화 여부 판단
             if (S >= Sc) then
-                ! 활성화된 입자의 수
+                ! 활성화된 입자의 수 (개수/부피, #/m^3)
                 n_activated = n_bin(i)
                 activated_drops = activated_drops + n_activated
-
-                ! 응결된 물의 부피 계산
-                delta_volume = (4.0d0 / 3.0d0) * pi * (rc**3 - rs**3)
-                ! 개별 입자당 응결된 물의 질량
-                delta_mass_per_particle = delta_volume * rho_w
-
-                ! 해당 bin에서 응결된 물의 총 질량
-                delta_mass_bin = n_activated * delta_mass_per_particle
-
-                ! 총 응결된 물의 질량에 합산
-                delta_qv = delta_qv + delta_mass_bin
+        
+                ! 응결된 물의 부피 계산 (m^3)
+                delta_volume = ((4.0d0 / 3.0d0) * pi * (rs**3)) * rho_w * n_activated
+        
+                ! 총 응결된 물의 질량에 합산 (kg/kg)
+                delta_qv = delta_qv + delta_mass_bin / rho
             end if
         end do
-
+        
         ! 수증기 혼합비 업데이트 (kg/kg)
         q = q - delta_qv
 
