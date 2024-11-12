@@ -13,7 +13,7 @@ program adiabatic_bin_model
     real(8)              :: a, b, Ms, rho_s, q, S, w, T, p, rho
 
     ! 분포 함수 및 에어로졸 특성 변수
-    real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:)
+    real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:)
     real(8)              :: rs, rc, Sc, pdf_value, dr, total_drops, activated_drops
     real(8)              :: delta_qv, n_activated
     real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin
@@ -26,13 +26,13 @@ program adiabatic_bin_model
     real(8)              :: diameter_nm, dlogD, y_value
 
     ! 추가된 변수 선언
-    real(8)              :: log_rmin, log_rmax, delta_logr
-    real(8)              :: rmin, rmax
+    real(8)              :: log_rmin, log_rmax, delta_logr, log_rmin_drop, log_rmax_drop, delta_logr_drop
+    real(8)              :: rmin, rmax, rmin_drop, rmax_drop
     real(8)              :: qv
     ! ============================================================
 
     ! namelist에서 읽을 변수 선언
-    namelist /input_params/ aerosol_type, w, T, z, p, i_time, rmin, rmax, qv
+    namelist /input_params/ aerosol_type, w, T, z, p, i_time, rmin, rmax, qv, rmin_drop, rmax_drop
     ! ============================================================
     ! 변수 초기화
     dt           = 1.0d0
@@ -55,15 +55,25 @@ program adiabatic_bin_model
     allocate(r_center(nbin))
     allocate(n_bin(nbin))
     allocate(log_r(nbin+1))
+    allocate(r_drop(nbin_drop+1))
+    allocate(r_center_drop(nbin_drop))
+    allocate(n_bin_drop(nbin_drop))
+    allocate(log_r_drop(nbin_drop+1))
 
     ! bin 경계 계산을 위한 로그 값 계산
     log_rmin   = log(rmin)
     log_rmax   = log(rmax)
     delta_logr = (log_rmax - log_rmin) / nbin
 
+    ! drop_bin 경계 계산을 위한 로그 값 계산
+    log_rmin_drop   = log(rmin_drop)
+    log_rmax_drop   = log(rmax_drop)
+    delta_logr_drop = (log_rmax_drop - log_rmin_drop) / nbin_drop
+
     ! 에어로졸 설정
     call set_aerosol(aerosol_type, Ms, rho_s, i_vant)
-    call cal_bin(r, r_center, log_r, log_rmin, delta_logr)
+    call cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
+                 r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
 
     ! 각 bin마다 포함되는 입자 수 계산
     total_drops = 0.0d0
@@ -144,5 +154,9 @@ program adiabatic_bin_model
     deallocate(r_center)
     deallocate(n_bin)
     deallocate(log_r)
+    deallocate(r_drop(nbin_drop+1))
+    deallocate(r_center_drop(nbin_drop))
+    deallocate(n_bin_drop(nbin_drop))
+    deallocate(log_r_drop(nbin_drop+1))
 
 end program adiabatic_bin_model
