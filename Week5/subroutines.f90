@@ -73,19 +73,19 @@ subroutine lognormal(r, pdf_value)
     pdf_i     = N0_val_1 * pdf_i
     total_pdf = total_pdf + pdf_i
 
-    ! 모드 2
-    term1     = - (log(r / rm_val_2))**2 / (2.0d0 * (log(sig_val_2))**2)
-    term2     = r * log(sig_val_2) * sqrt(2.0d0 * pi)
-    pdf_i     = (1.0d0 / term2) * exp(term1)
-    pdf_i     = N0_val_2 * pdf_i
-    total_pdf = total_pdf + pdf_i
+    ! ! 모드 2
+    ! term1     = - (log(r / rm_val_2))**2 / (2.0d0 * (log(sig_val_2))**2)
+    ! term2     = r * log(sig_val_2) * sqrt(2.0d0 * pi)
+    ! pdf_i     = (1.0d0 / term2) * exp(term1)
+    ! pdf_i     = N0_val_2 * pdf_i
+    ! total_pdf = total_pdf + pdf_i
 
-    ! 모드 3
-    term1     = - (log(r / rm_val_3))**2 / (2.0d0 * (log(sig_val_3))**2)
-    term2     = r * log(sig_val_3) * sqrt(2.0d0 * pi)
-    pdf_i     = (1.0d0 / term2) * exp(term1)
-    pdf_i     = N0_val_3 * pdf_i
-    total_pdf = total_pdf + pdf_i
+    ! ! 모드 3
+    ! term1     = - (log(r / rm_val_3))**2 / (2.0d0 * (log(sig_val_3))**2)
+    ! term2     = r * log(sig_val_3) * sqrt(2.0d0 * pi)
+    ! pdf_i     = (1.0d0 / term2) * exp(term1)
+    ! pdf_i     = N0_val_3 * pdf_i
+    ! total_pdf = total_pdf + pdf_i
 
     pdf_value = total_pdf
 

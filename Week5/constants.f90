@@ -21,19 +21,23 @@ module constants
     real(8),    parameter :: sigma_v   = 0.0728d0               ! 물의 표면 장력 (J/m^2)
 
     ! 모드 1
-    real(8),    parameter :: N0_val_1  = 8.5E9                ! 수농도        (#/m^3)
-    real(8),    parameter :: rm_val_1  = 3.65D-9              ! 기하 평균 반경 (m)
-    real(8),    parameter :: sig_val_1 = 1.60d0               ! 기하 표준 편차
+    real(8),    parameter :: N0_val_1  = 3.0E8                ! 수농도        (#/m^3)
+    real(8),    parameter :: rm_val_1  = 1.0D-7            ! 기하 평균 반경 (m)
+    real(8),    parameter :: sig_val_1 = 1.80d0               ! 기하 표준 편차
+    
+    ! real(8),    parameter :: N0_val_1  = 8.5E9                ! 수농도        (#/m^3)
+    ! real(8),    parameter :: rm_val_1  = 3.65D-9              ! 기하 평균 반경 (m)
+    ! real(8),    parameter :: sig_val_1 = 1.60d0               ! 기하 표준 편차
 
-    ! 모드 2
-    real(8),    parameter :: N0_val_2  = 5.8E9
-    real(8),    parameter :: rm_val_2  = 22.5D-9
-    real(8),    parameter :: sig_val_2 = 1.65d0
+    ! ! 모드 2
+    ! real(8),    parameter :: N0_val_2  = 5.8E9
+    ! real(8),    parameter :: rm_val_2  = 22.5D-9
+    ! real(8),    parameter :: sig_val_2 = 1.65d0
 
-    ! 모드 3
-    real(8),    parameter :: N0_val_3  = 0.95E9
-    real(8),    parameter :: rm_val_3  = 77D-9
-    real(8),    parameter :: sig_val_3 = 1.60d0
+    ! ! 모드 3
+    ! real(8),    parameter :: N0_val_3  = 0.95E9
+    ! real(8),    parameter :: rm_val_3  = 77D-9
+    ! real(8),    parameter :: sig_val_3 = 1.60d0
 
     ! real(8),    parameter :: Fd        = 
     ! real(8),    parameter :: Fk        = 

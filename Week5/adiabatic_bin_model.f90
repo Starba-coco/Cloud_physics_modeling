@@ -96,7 +96,14 @@ program adiabatic_bin_model
     ! 단열 상승 과정
     do
         time = time + dt
-        if (time > i_time) exit
+
+        ! i_time에 따라 w 설정
+        if (time <= 1800) then
+            w = 1.0
+        else
+            w = 0.0
+        end if
+        if (time > 3600) exit
 
         ! 단열 과정
         call adiabatic_process(z, T, p, rho, w, dt, q, S)
@@ -154,9 +161,9 @@ program adiabatic_bin_model
     deallocate(r_center)
     deallocate(n_bin)
     deallocate(log_r)
-    deallocate(r_drop(nbin_drop+1))
-    deallocate(r_center_drop(nbin_drop))
-    deallocate(n_bin_drop(nbin_drop))
-    deallocate(log_r_drop(nbin_drop+1))
+    ! deallocate(r_drop(nbin_drop+1))
+    ! deallocate(r_center_drop(nbin_drop))
+    ! deallocate(n_bin_drop(nbin_drop))
+    ! deallocate(log_r_drop(nbin_drop+1))
 
 end program adiabatic_bin_model
