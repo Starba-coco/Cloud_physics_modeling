@@ -4,6 +4,7 @@ module constants
     ! 물리 상수
     real(8),    parameter :: g         = 9.80665d0              ! 중력 가속도        (m/s^2)
     real(8),    parameter :: R_dry     = 287.058d0              ! 건조 공기 기체 상수 (J/kg·K)
+    real(8),    parameter :: Lv        = 2.4656d8               ! 수증기의 잠열 상수 (J/kg)
     real(8),    parameter :: cp        = 1005.0d0               ! 공기의 비열        (J/kg·K)
     real(8),    parameter :: pi        = 4.0d0 * atan(1.0d0)    ! 원주율
     integer(8), parameter :: nbin      = 300                    ! bin의 개수 (#)

@@ -1,25 +1,30 @@
-subroutine adiabatic_process(z, T, p, rho, w, dt, q, S)
-    use constants
+subroutine adiabatic_process(z, T, p, w, dt)
+    use constants, only: g, cp
     implicit none
-    real(8), intent(inout) :: z, T, p, rho, q
+    real(8), intent(inout) :: z, T, p
     real(8), intent(in)    :: w, dt
-    real(8), intent(out)   :: S
-    real(8) :: dz, dp, e_s, e, T_Celsius
+    real(8) :: dz, dp, rho
 
     dz = w * dt
     z  = z + dz
 
+    call cal_rhoa(p, T, rho)
+
     T         = T - (g / cp) * dz                                      ! 온도 업데이트
     dp        = -rho * g * dz                                          ! 압력 업데이트
     p         = p + dp
-    rho       = p / (R_dry * T)                                        ! 밀도 업데이트
-    e         = p * q / (epsilon + q * (1.0d0 - epsilon))              ! 수증기 압력 계산
-    T_Celsius = T - 273.15d0
-    e_s       = 6.112d0 * exp((17.67d0 * T_Celsius) / (T_Celsius + 243.5d0)) ! 포화 수증기 압력 계산
-    e_s       = e_s * 100.0d0                                          ! hPa -> Pa 변환
-    S         = (e / e_s) - 1.0d0                                      ! 상대습도 계산
 
 end subroutine adiabatic_process
+
+subroutine cal_rhoa(p, T, rho)
+    use constants, only: R_dry
+    implicit none
+    real(8), intent(in)  :: p, T
+    real(8), intent(out) :: rho
+
+    rho = p / (R_dry * T)                                        ! 밀도 업데이트
+
+end subroutine cal_rhoa
 
 subroutine cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
                    r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
@@ -150,20 +155,21 @@ subroutine write_distribution(nbin, r_center, n_bin, delta_logr)
     close(dist_unit)
 end subroutine write_distribution
 
-
 subroutine update_saturation(p, T, qv, S)
     use constants
     implicit none
     real(8), intent(in)    :: p, T, qv
     real(8), intent(out)   :: S
-    real(8)                :: e_s, qs
+    real(8)                :: e, e_s, T_Celsius
+
+    ! 수증기 압력 계산
+    e         = p * qv / (epsilon + qv * (1.0d0 - epsilon))
 
     ! 포화 수증기 압력 계산
-    e_s = 610.94d0 * exp(17.625d0 * (T - 273.15d0) / (T - 30.11d0))
+    T_Celsius = T - 273.15d0
+    e_s       = 611.2d0 * exp((17.67d0 * T_Celsius) / (T_Celsius + 243.5d0))
 
-    ! 포화 혼합비 계산
-    qs = epsilon * e_s / (p - e_s)
+    ! 상대습도 계산
+    S         = (e / e_s) - 1.0d0                                      
 
-    ! 과포화도 계산
-    S = qv / qs - 1.0d0
 end subroutine update_saturation

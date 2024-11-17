@@ -1,4 +1,5 @@
 #%%
+
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -18,6 +19,7 @@ activated_drops = data['Activated_Drops']
 plt.figure(figsize=(10, 6))
 plt.plot(time, activated_drops, marker='o', linestyle='-', color='b')
 plt.xlabel('Time (s)')
+# plt.xlim(1280, 1310)
 plt.ylabel('Activated Drops')
 plt.title('Activated Drops over Time')
 plt.grid(True)

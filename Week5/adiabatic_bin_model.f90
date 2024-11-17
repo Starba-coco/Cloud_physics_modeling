@@ -14,7 +14,7 @@ program adiabatic_bin_model
 
     ! 분포 함수 및 에어로졸 특성 변수
     real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:)
-    real(8)              :: rs, rc, Sc, pdf_value, dr, total_drops, activated_drops
+    real(8)              :: rs, rc, Sc, pdf_value, dr, total_aerosols, activated_drops
     real(8)              :: delta_qv, n_activated
     real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin
 
@@ -28,7 +28,7 @@ program adiabatic_bin_model
     ! 추가된 변수 선언
     real(8)              :: log_rmin, log_rmax, delta_logr, log_rmin_drop, log_rmax_drop, delta_logr_drop
     real(8)              :: rmin, rmax, rmin_drop, rmax_drop
-    real(8)              :: qv
+    real(8)              :: qv, dqc, activate_ratio, ln_r1, ln_r2, ln_rc, ln_r0
     ! ============================================================
 
     ! namelist에서 읽을 변수 선언
@@ -46,9 +46,8 @@ program adiabatic_bin_model
     read(15, nml=input_params)
     close(15)
 
-    ! namelist에서 읽은 변수들을 사용하여 초기화
-    rho = p / (R_dry * T)
-    q   = qv
+    ! calculate the inital air density to convert units from #/m3 to #/kg
+    call cal_rhoa(p, T, rho)
 
     ! bin_model 계산을 위한 배열 할당
     allocate(r(nbin+1))
@@ -76,14 +75,16 @@ program adiabatic_bin_model
                  r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
 
     ! 각 bin마다 포함되는 입자 수 계산
-    total_drops = 0.0d0
 
     do i = 1, nbin
         call lognormal(r_center(i), pdf_value)
         dr          = r(i + 1) - r(i)
         n_bin(i)    = pdf_value * dr
-        total_drops = total_drops + n_bin(i)
     end do
+
+    ! from #/m3 to #/kg
+    n_bin = n_bin / rho
+    total_aerosols = sum(n_bin)
 
     call write_distribution(nbin, r_center, n_bin, delta_logr)
 
@@ -91,7 +92,7 @@ program adiabatic_bin_model
     open(10, file='output.txt', status='unknown', action='write')
 
     ! 헤더
-    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Activated_Drops, q'
+    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Nd(#/kg), qv(g/kg)'
 
     ! 단열 상승 과정
     do
@@ -106,52 +107,55 @@ program adiabatic_bin_model
         if (time > 3600) exit
 
         ! 단열 과정
-        call adiabatic_process(z, T, p, rho, w, dt, q, S)
+        call adiabatic_process(z, T, p, rho, w, dt)
+        call cal_rhoa(p, T, rho)
+
+        ! 상대 습도 및 과포화도 업데이트
+        call update_saturation(p, T, qv, S)
 
         ! kohler 상수 계산 (온도 의존)
         a = (2.0d0 * sigma_v)      / (Rv * rho_w * T)
         b = i_vant * ((rho_s * Mw) / (Ms * rho_w))
 
-        activated_drops = 0.0d0
-        delta_qv        = 0.0d0
-        
-        ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
+        ln_r0 = log( (a / 3.0d0) * (4.0d0 / (b * (S**2))) ** (1.0d0 / 3.0d0) )
+
+        ! ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
         do i = 1, nbin
-            rs = r_center(i)
-        
-            ! 임계 과포화도 계산
-            Sc = sqrt((4.0d0 * (a**3)) / (27.0d0 * b * rs**3))
-        
-            ! 임계 반경 계산
-            ! rc = ( (a * rs**3) / (3.0d0 * b) ) ** 0.25d0
-            rc = ((a / 3.0d0) / (4.0d0 * b * (Sc**2))) ** (1.0d0 / 3.0d0)
+            ln_r1 = log(r(i))
+            ln_r2 = log(r(i+1))
 
             ! 활성화 여부 판단
-            if (S >= Sc) then
-                ! 활성화된 입자의 수 (개수/부피, #/m^3)
-                n_activated = n_bin(i)
-                activated_drops = activated_drops + n_activated
-        
-                ! 응결된 물의 부피 계산 (m^3)
-                delta_volume = ((4.0d0 / 3.0d0) * pi * (rs**3)) * rho_w * n_activated
-        
-                ! 총 응결된 물의 질량에 합산 (kg/kg)
-                delta_qv = delta_qv + delta_mass_bin / rho
+            if (S.ge.0) then
+
+                if (ln_r0 > ln_r2) then  ! none of them can be activated
+                    activate_ratio = 0.0
+                    cycle
+
+                else if (ln_r0 > ln_r1) then ! some of them can be activated
+                    activate_ratio = (ln_r2 - ln_r0) / (ln_r2 - ln_r1)
+
+                else ! ln_r0 < ln_r1 --> all of them can be activated
+                    activate_ratio = 1.0
+                end if
+
+                !활성화된 입자의 수 (개수/부피, #/m^3)
+                n_activated   = n_bin(i) * activate_ratio
+                n_bin_drop(1) = n_bin_drop(1) + n_activated
+                n_bin(i)      = n_bin(i)      - n_activated
+
+                dqc = n_activated*rho_w*4.0/3.0*pi*r_center_drop(1)**3
+                qv = qv - dqc
+                T = T + (Lv*dqc / cp)
+                call update_saturation(p, T, qv, S)
+
             end if
         end do
-        
-        ! 수증기 혼합비 업데이트 (kg/kg)
-        q = q - delta_qv
 
-        ! q가 음수가 되지 않도록 체크
-        if (q < 0.0d0) q = 0.0d0
-
-        ! 상대 습도 및 과포화도 업데이트
-        call update_saturation(p, T, q, S)
+        ! condensation
 
         ! 결과 출력 (파일로 쓰기)
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
-        time, w, T, p, z, (S + 1.0d0) * 100.0d0, activated_drops, q
+        time, w, T, p, z, (S + 1.0d0) * 100.0d0, sum(n_bin_drop), qv*1.0d3
     end do
 
     close(10)
