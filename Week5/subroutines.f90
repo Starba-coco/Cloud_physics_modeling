@@ -10,8 +10,8 @@ subroutine adiabatic_process(z, T, p, w, dt)
 
     call cal_rhoa(p, T, rho)
 
-    T         = T - (g / cp) * dz                                      ! 온도 업데이트
-    dp        = -rho * g * dz                                          ! 압력 업데이트
+    T         = T - (g / cp) * dz   ! 온도 업데이트
+    dp        = -rho * g * dz       ! 압력 업데이트
     p         = p + dp
 
 end subroutine adiabatic_process
@@ -22,7 +22,7 @@ subroutine cal_rhoa(p, T, rho)
     real(8), intent(in)  :: p, T
     real(8), intent(out) :: rho
 
-    rho = p / (R_dry * T)                                        ! 밀도 업데이트
+    rho = p / (R_dry * T)           ! 밀도 업데이트
 
 end subroutine cal_rhoa
 
@@ -44,7 +44,7 @@ subroutine cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
         r(i)     = exp(log_r(i))
     end do
     
-    ! Aerosol bin 중심 계산 (기하 평균)
+    ! Aerosol bin 중심 계산
     do i = 1, nbin
         r_center(i) = sqrt(r(i) * r(i + 1))
     end do
@@ -55,7 +55,7 @@ subroutine cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
         r_drop(i)     = exp(log_r_drop(i))
     end do
     
-    ! drop_bin 중심 계산 (기하 평균)
+    ! drop_bin 중심 계산
     do i = 1, nbin_drop
         r_center_drop(i) = sqrt(r_drop(i) * r_drop(i + 1))
     end do
@@ -139,7 +139,7 @@ subroutine write_distribution(nbin, r_center, n_bin, delta_logr)
     ! 헤더
     write(dist_unit, '(A)') 'Diameter(nm)    dN/dlogD * 1e-3 (cm^-3/nm)'
 
-    ! dlogD 계산 (상수로 계산)
+    ! dlogD 계산
     dlogD = delta_logr / log(10.0d0)  ! ln(10)으로 나누어 log10 기반으로 변환
 
     ! 분포 데이터를 파일에 출력
@@ -173,3 +173,86 @@ subroutine update_saturation(p, T, qv, S)
     S         = (e / e_s) - 1.0d0                                      
 
 end subroutine update_saturation
+
+subroutine activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
+                      r_center, r_center_drop, Ms, rho_s, i_vant)
+    use constants, only: sigma_v, Rv, rho_w, Mw, Lv, cp, pi
+    implicit none
+
+    ! 변수 선언
+    integer, intent(in)    :: nbin, nbin_drop, i_vant
+    real(8), intent(inout) :: p, T, qv, S
+    real(8), intent(in)    :: r(nbin+1), r_center(nbin), r_center_drop(nbin_drop)
+    real(8), intent(inout) :: n_bin(nbin), n_bin_drop(nbin_drop)
+    real(8), intent(in)    :: Ms, rho_s
+
+    ! 로컬 변수
+    real(8) :: a, b, ln_r0, ln_r1, ln_r2, activate_ratio, n_activated, dqc
+    integer :: i
+
+    ! 콜러 상수 계산 (온도 의존)
+    a = (2.0d0 * sigma_v)      / (Rv * rho_w * T)
+    b = i_vant * ((rho_s * Mw) / (Ms * rho_w))
+
+    ln_r0 = log( (a / 3.0d0) * ( (4.0d0 / (b * (S**2))) ** (1.0d0 / 3.0d0) ) )
+
+    ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
+    do i = 1, nbin
+        ln_r1 = log(r(i))
+        ln_r2 = log(r(i+1))
+
+        ! 활성화 여부 판단
+        if (S .ge. 0.0d0) then
+
+            if (ln_r0 > ln_r2) then  ! 활성화되지 않음
+                activate_ratio = 0.0d0
+                cycle
+
+            else if (ln_r0 > ln_r1) then ! 일부만 활성화
+                activate_ratio = (ln_r2 - ln_r0) / (ln_r2 - ln_r1)
+
+            else ! ln_r0 ≤ ln_r1 --> 모두 활성화
+                activate_ratio = 1.0d0
+            end if
+
+            ! 활성화된 입자의 수
+            n_activated   = n_bin(i) * activate_ratio
+            n_bin_drop(1) = n_bin_drop(1) + n_activated
+            n_bin(i)      = n_bin(i)      - n_activated
+
+            dqc = n_activated * rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(1)**3
+            qv  = qv - dqc
+            T   = T + (Lv * dqc / cp)
+
+            call update_saturation(p, T, qv, S)
+
+        end if
+    end do
+
+end subroutine activation
+
+subroutine update_time_and_w(time, dt, i_time, w_val, w, end_flag)
+    implicit none
+    ! 변수 선언
+    real(8), intent(inout) :: time
+    real(8), intent(in)    :: dt
+    real(8), intent(in)    :: i_time(2), w_val(2)
+    real(8), intent(out)   :: w
+    logical, intent(out)   :: end_flag
+
+    ! 시간 업데이트
+    time = time + dt
+
+    ! 초기화
+    w = 0.0d0
+
+    ! 상승 속도 업데이트
+    if (time <= i_time(1)) then
+        w = w_val(1)
+    else if (time <= i_time(2)) then
+        w = w_val(2)
+    else
+        end_flag = .true.
+    end if
+
+end subroutine update_time_and_w

@@ -1,14 +1,14 @@
 &input_params
     aerosol_type = 'NaCl'
-    w            = 1.0d0            ! [m/s] 상승 속도
-    T            = 288.15       ! [K]   초기 온도
-    z            = 0.0d0            ! [m]   초기 고도
-    p            = 100000.0d0       ! [Pa] 초기 압력
-    i_time       = 3600.0d0         ! [s] 적분시간
-    rmin         = 1.00D-09         ! [m] drop의 최소 크기
-    rmax         = 1.00D-04         ! [m] drop의 최대 크기
-    rmin_drop    = 1.00D-09         ! [m] drop_bin의 최대 크기
-    rmax_drop    = 1.00D-04         ! [m] drop_bin의 최대 크기
-    ! qv           = 0.01093d0        ! [kg/kg] 초기 수증기 혼합비
-    qv           = 0.0053d0        ! [kg/kg] 초기 수증기 혼합비
+    w_val        = 1.0d0, 0.0d0         ! [m/s] 상승 속도
+    T            = 288.15               ! [K]   초기 온도
+    z            = 0.0d0                ! [m]   초기 고도
+    p            = 100000.0d0           ! [Pa] 초기 압력
+    i_time       = 1800.0d0, 3600.0d0   ! [s] 적분시간
+    rmin         = 1.00D-09             ! [m] drop의 최소 크기
+    rmax         = 1.00D-04             ! [m] drop의 최대 크기
+    rmin_drop    = 1.00D-09             ! [m] drop_bin의 최대 크기
+    rmax_drop    = 1.00D-04             ! [m] drop_bin의 최대 크기
+    ! qv         = 0.01093d0            ! [kg/kg] 초기 수증기 혼합비
+    qv           = 0.00959d0            ! [kg/kg] 초기 수증기 혼합비
 /

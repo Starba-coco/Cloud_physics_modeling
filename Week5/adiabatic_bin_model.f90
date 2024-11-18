@@ -7,7 +7,8 @@ program adiabatic_bin_model
     integer              :: i, i_vant
 
     ! 시간 및 공간 변수
-    real(8)              :: dt, time, z, i_time
+    real(8)              :: dt, time, z, i_time(2), w_val(2)
+    logical              :: end_flag
 
     ! 물리적 상수 및 초기 상태
     real(8)              :: a, b, Ms, rho_s, q, S, w, T, p, rho
@@ -32,7 +33,7 @@ program adiabatic_bin_model
     ! ============================================================
 
     ! namelist에서 읽을 변수 선언
-    namelist /input_params/ aerosol_type, w, T, z, p, i_time, rmin, rmax, qv, rmin_drop, rmax_drop
+    namelist /input_params/ aerosol_type, w_val, T, z, p, i_time, rmin, rmax, qv, rmin_drop, rmax_drop
     ! ============================================================
     ! 변수 초기화
     dt           = 1.0d0
@@ -92,19 +93,14 @@ program adiabatic_bin_model
     open(10, file='output.txt', status='unknown', action='write')
 
     ! 헤더
-    write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Nd(#/kg), qv(g/kg)'
-
+    write(10, '(A7,3X,A6,3X,A10,3X,A10,3X,A8,3X,A12,3X,A12,3X,A12)') &
+              'Time(s)', 'w(m/s)', 'T(K)', 'p(Pa)', 'z(m)', 'RH(%)', 'Nd(#/kg)', 'qv(g/kg)'
+              
     ! 단열 상승 과정
     do
-        time = time + dt
+        call update_time_and_w(time, dt, i_time, w_val, w, end_flag)
 
-        ! i_time에 따라 w 설정
-        if (time <= 1800) then
-            w = 1.0
-        else
-            w = 0.0
-        end if
-        if (time > 3600) exit
+        if (end_flag) exit
 
         ! 단열 과정
         call adiabatic_process(z, T, p, rho, w, dt)
@@ -113,49 +109,15 @@ program adiabatic_bin_model
         ! 상대 습도 및 과포화도 업데이트
         call update_saturation(p, T, qv, S)
 
-        ! kohler 상수 계산 (온도 의존)
-        a = (2.0d0 * sigma_v)      / (Rv * rho_w * T)
-        b = i_vant * ((rho_s * Mw) / (Ms * rho_w))
-
-        ln_r0 = log( (a / 3.0d0) * (4.0d0 / (b * (S**2))) ** (1.0d0 / 3.0d0) )
-
-        ! ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
-        do i = 1, nbin
-            ln_r1 = log(r(i))
-            ln_r2 = log(r(i+1))
-
-            ! 활성화 여부 판단
-            if (S.ge.0) then
-
-                if (ln_r0 > ln_r2) then  ! none of them can be activated
-                    activate_ratio = 0.0
-                    cycle
-
-                else if (ln_r0 > ln_r1) then ! some of them can be activated
-                    activate_ratio = (ln_r2 - ln_r0) / (ln_r2 - ln_r1)
-
-                else ! ln_r0 < ln_r1 --> all of them can be activated
-                    activate_ratio = 1.0
-                end if
-
-                !활성화된 입자의 수 (개수/부피, #/m^3)
-                n_activated   = n_bin(i) * activate_ratio
-                n_bin_drop(1) = n_bin_drop(1) + n_activated
-                n_bin(i)      = n_bin(i)      - n_activated
-
-                dqc = n_activated*rho_w*4.0/3.0*pi*r_center_drop(1)**3
-                qv = qv - dqc
-                T = T + (Lv*dqc / cp)
-                call update_saturation(p, T, qv, S)
-
-            end if
-        end do
+        ! Activation
+        call activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
+                        r_center, r_center_drop, Ms, rho_s, i_vant)
 
         ! condensation
 
         ! 결과 출력 (파일로 쓰기)
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
-        time, w, T, p, z, (S + 1.0d0) * 100.0d0, sum(n_bin_drop), qv*1.0d3
+              time, w, T, p, z, (S + 1.0d0) * 100.0d0, sum(n_bin_drop), qv*1.0d3
     end do
 
     close(10)
@@ -165,9 +127,5 @@ program adiabatic_bin_model
     deallocate(r_center)
     deallocate(n_bin)
     deallocate(log_r)
-    ! deallocate(r_drop(nbin_drop+1))
-    ! deallocate(r_center_drop(nbin_drop))
-    ! deallocate(n_bin_drop(nbin_drop))
-    ! deallocate(log_r_drop(nbin_drop+1))
 
 end program adiabatic_bin_model
