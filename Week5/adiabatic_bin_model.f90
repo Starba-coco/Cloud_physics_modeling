@@ -14,10 +14,11 @@ program adiabatic_bin_model
     real(8)              :: a, b, Ms, rho_s, q, S, w, T, p, rho
 
     ! 분포 함수 및 에어로졸 특성 변수
-    real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:)
+    real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:)
+    real(8), allocatable :: r_drop(:), m_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:)
     real(8)              :: rs, rc, Sc, pdf_value, dr, total_aerosols, activated_drops
-    real(8)              :: delta_qv, n_activated
-    real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin
+    real(8)              :: delta_qv, n_activated, delta_T
+    real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin, total_liquid_mass
 
     ! 출력 파일 관련 변수
     character(len=20)    :: aerosol_type
@@ -47,7 +48,7 @@ program adiabatic_bin_model
     read(15, nml=input_params)
     close(15)
 
-    ! calculate the inital air density to convert units from #/m3 to #/kg
+    ! 초기 공기 밀도 계산 (단위 변환을 위해)
     call cal_rhoa(p, T, rho)
 
     ! bin_model 계산을 위한 배열 할당
@@ -55,7 +56,8 @@ program adiabatic_bin_model
     allocate(r_center(nbin))
     allocate(n_bin(nbin))
     allocate(log_r(nbin+1))
-    allocate(r_drop(nbin_drop+1))
+    allocate(m_drop(nbin_drop))
+    allocate(r_drop(nbin_drop))
     allocate(r_center_drop(nbin_drop))
     allocate(n_bin_drop(nbin_drop))
     allocate(log_r_drop(nbin_drop+1))
@@ -76,18 +78,18 @@ program adiabatic_bin_model
                  r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
 
     ! 각 bin마다 포함되는 입자 수 계산
-
     do i = 1, nbin
         call lognormal(r_center(i), pdf_value)
         dr          = r(i + 1) - r(i)
         n_bin(i)    = pdf_value * dr
     end do
 
-    ! from #/m3 to #/kg
+    ! 단위 변환: #/m3에서 #/kg로
     n_bin = n_bin / rho
     total_aerosols = sum(n_bin)
 
-    call write_distribution(nbin, r_center, n_bin, delta_logr)
+    ! 활성화된 물방울 수 초기화
+    n_bin_drop = 0.0d0
 
     ! 결과 출력 파일 설정
     open(10, file='output.txt', status='unknown', action='write')
@@ -95,11 +97,10 @@ program adiabatic_bin_model
     ! 헤더
     write(10, '(A7,3X,A6,3X,A10,3X,A10,3X,A8,3X,A12,3X,A12,3X,A12)') &
               'Time(s)', 'w(m/s)', 'T(K)', 'p(Pa)', 'z(m)', 'RH(%)', 'Nd(#/kg)', 'qv(g/kg)'
-              
+
     ! 단열 상승 과정
     do
         call update_time_and_w(time, dt, i_time, w_val, w, end_flag)
-
         if (end_flag) exit
 
         ! 단열 과정
@@ -113,11 +114,36 @@ program adiabatic_bin_model
         call activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
                         r_center, r_center_drop, Ms, rho_s, i_vant)
 
-        ! condensation
+        ! 활성화된 물방울의 질량과 반경 초기화
+        do i = 1, nbin_drop
+            if (n_bin_drop(i) > 0.0d0) then
+                r_drop(i) = r_center_drop(i)
+                m_drop(i) = (4.0d0 / 3.0d0) * pi * r_drop(i)**3 * rho_w
+            end if
+        end do
+
+        ! 응결 과정
+        delta_qv = 0.0d0
+        delta_T  = 0.0d0
+        total_liquid_mass = 0.0d0
+
+        do i = 1, nbin_drop
+            if (n_bin_drop(i) > 0.0d0) then
+                call condensation(T, p, S, dt, m_drop(i), r_drop(i), n_bin_drop(i), rho, delta_qv, delta_T)
+                total_liquid_mass = total_liquid_mass + m_drop(i) * n_bin_drop(i)
+            end if
+        end do
+        print *, time, total_liquid_mass
+        ! 수증기 혼합비와 온도 업데이트
+        qv = qv + delta_qv
+        T  = T + delta_T
+
+        ! 과포화도 재계산
+        call update_saturation(p, T, qv, S)
 
         ! 결과 출력 (파일로 쓰기)
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
-              time, w, T, p, z, (S + 1.0d0) * 100.0d0, sum(n_bin_drop), qv*1.0d3
+              time, w, T, p, z, (S + 1.0d0) * 100.0d0, sum(n_bin_drop), qv
     end do
 
     close(10)
@@ -127,5 +153,10 @@ program adiabatic_bin_model
     deallocate(r_center)
     deallocate(n_bin)
     deallocate(log_r)
+    deallocate(m_drop)
+    deallocate(r_drop)
+    deallocate(r_center_drop)
+    deallocate(n_bin_drop)
+    deallocate(log_r_drop)
 
 end program adiabatic_bin_model
