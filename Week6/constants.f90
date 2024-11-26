@@ -4,7 +4,7 @@ module constants
     ! 물리 상수
     real(8),    parameter :: g         = 9.80665d0              ! 중력 가속도        (m/s^2)
     real(8),    parameter :: R_dry     = 287.058d0              ! 건조 공기 기체 상수 (J/kg·K)
-    real(8),    parameter :: Lv        = 2.4656d8               ! 수증기의 잠열 상수 (J/kg)
+    real(8),    parameter :: Lv        = 2.5000d8               ! 수증기의 잠열 상수 (J/kg)
     real(8),    parameter :: cp        = 1005.0d0               ! 공기의 비열        (J/kg·K)
     real(8),    parameter :: pi        = 4.0d0 * atan(1.0d0)    ! 원주율
     integer(8), parameter :: nbin      = 300                    ! bin의 개수 (#)
@@ -23,7 +23,7 @@ module constants
 
     ! 모드 1
     real(8),    parameter :: N0_val_1  = 3.0E8                ! 수농도        (#/m^3)
-    real(8),    parameter :: rm_val_1  = 1.0D-7            ! 기하 평균 반경 (m)
+    real(8),    parameter :: rm_val_1  = 1.0D-7               ! 기하 평균 반경 (m)
     real(8),    parameter :: sig_val_1 = 1.80d0               ! 기하 표준 편차
     
     ! real(8),    parameter :: N0_val_1  = 8.5E9                ! 수농도        (#/m^3)
@@ -40,6 +40,4 @@ module constants
     ! real(8),    parameter :: rm_val_3  = 77D-9
     ! real(8),    parameter :: sig_val_3 = 1.60d0
 
-    ! real(8),    parameter :: Fd        = 
-    ! real(8),    parameter :: Fk        = 
 end module constants

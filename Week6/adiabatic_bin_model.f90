@@ -13,21 +13,21 @@ program adiabatic_bin_model
     real(8)              :: a, b, Ms, rho_s, q, S, w, T, p, rho
 
     ! 분포 함수 및 에어로졸 특성 변수
-    real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:)
+    real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:), m(:), radius_drop(:), dm(:), m_new(:), r_new(:), n_bin_new(:)
     real(8)              :: rs, rc, Sc, pdf_value, dr, total_aerosols, activated_drops
     real(8)              :: delta_qv, n_activated
     real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin
 
     ! 출력 파일 관련 변수
     character(len=20)    :: aerosol_type
-    integer              :: dist_unit
+    integer              :: dist_unit, nt_steps
 
     ! 에어로졸 직경 관련 변수
     real(8)              :: diameter_nm, dlogD, y_value
 
     ! 추가된 변수 선언
     real(8)              :: log_rmin, log_rmax, delta_logr, log_rmin_drop, log_rmax_drop, delta_logr_drop
-    real(8)              :: rmin, rmax, rmin_drop, rmax_drop
+    real(8)              :: rmin, rmax, rmin_drop, rmax_drop, total_mass, mean_radius
     real(8)              :: qv, dqc, activate_ratio, ln_r1, ln_r2, ln_rc, ln_r0
     ! ============================================================
 
@@ -49,12 +49,18 @@ program adiabatic_bin_model
     ! calculate the inital air density to convert units from #/m3 to #/kg
     call cal_rhoa(p, T, rho)
 
-    ! bin_model 계산을 위한 배열 할당
+    ! 배열 할당
+    allocate(m(nbin_drop))
+    allocate(m_new(nbin_drop))
+    
+    allocate(radius_drop(nbin_drop))
     allocate(r(nbin+1))
     allocate(r_center(nbin))
     allocate(n_bin(nbin))
+    allocate(n_bin_new(nbin_drop))
     allocate(log_r(nbin+1))
     allocate(r_drop(nbin_drop+1))
+    allocate(r_new(nbin_drop+1))
     allocate(r_center_drop(nbin_drop))
     allocate(n_bin_drop(nbin_drop))
     allocate(log_r_drop(nbin_drop+1))
@@ -90,14 +96,16 @@ program adiabatic_bin_model
 
     ! 결과 출력 파일 설정
     open(10, file='output.txt', status='unknown', action='write')
+    ! open(11, file='test.txt',   status='unknown', action='write')
 
     ! 헤더
     write(10, '(A)') 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Nd(#/kg), qv(g/kg)'
+    ! write(11) 'Time(s)   w(m/s)         T(K)        p(Pa)       z(m)    RH(%)  Nd(#/kg), qv(g/kg)'
 
     ! 단열 상승 과정
     do
         time = time + dt
-
+    
         ! i_time에 따라 w 설정
         if (time <= i_time(1)) then
             w = 1.0
@@ -105,21 +113,24 @@ program adiabatic_bin_model
             w = 0.0
         end if
         if (time > i_time(2)) exit
-
+        ! print *, "1", w
         ! 단열 과정
         call adiabatic_process(z, T, p, rho, w, dt)
+        ! print *, "2", w, z
         call cal_rhoa(p, T, rho)
-
+    
         ! 상대 습도 및 과포화도 업데이트
         call update_saturation(p, T, qv, S)
-        call activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
-                        r_center, r_center_drop, Ms, rho_s, i_vant)
 
-        ! condensation
+        call activation(p, T, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
+                        Ms, rho_s, i_vant)
 
-        ! 결과 출력 (파일로 쓰기)
+        call condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_drop, qv)
+
+        call redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
+        
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
-        time, w, T, p, z, (S + 1.0d0) * 100.0d0, sum(n_bin_drop), qv*1.0d3
+              time, w, T, p, z, (S+1.0) * 100.0d0, sum(n_bin_drop), qv
     end do
 
     close(10)

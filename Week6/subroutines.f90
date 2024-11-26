@@ -1,21 +1,27 @@
-
 subroutine adiabatic_process(z, T, p, w, dt)
     use constants, only: g, cp
     implicit none
-    real(8), intent(inout) :: z, T, p
-    real(8), intent(in)    :: w, dt
+    real(8), intent(inout) :: z, T, p, w
+    real(8), intent(in)    :: dt
     real(8) :: dz, dp, rho
-
+    print *, "w : ", w, "dt : ", dt
     dz = w * dt
+    print *, "dz : ", dz
+    ! print *, dz
     z  = z + dz
+    ! print *, z
 
+
+    ! 온도 업데이트 후 밀도 계산
     call cal_rhoa(p, T, rho)
-
-    T         = T - (g / cp) * dz                                      ! 온도 업데이트
-    dp        = -rho * g * dz                                          ! 압력 업데이트
-    p         = p + dp
+    ! 온도 업데이트
+    T = T - (g / cp) * dz
+    ! 압력 업데이트
+    dp = -rho * g * dz
+    p  = p + dp
 
 end subroutine adiabatic_process
+
 
 subroutine cal_rhoa(p, T, rho)
     use constants, only: R_dry
@@ -68,7 +74,6 @@ subroutine lognormal(r, pdf_value)
     real(8), intent(in)  :: r
     real(8), intent(out) :: pdf_value
     real(8)              :: term1, term2, pdf_i, total_pdf
-    integer              :: i
 
     total_pdf = 0.0d0
 
@@ -175,59 +180,136 @@ subroutine update_saturation(p, T, qv, S)
 
 end subroutine update_saturation
 
-subroutine activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
-    r_center, r_center_drop, Ms, rho_s, i_vant)
+subroutine activation(p, T, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
+                      Ms, rho_s, i_vant)
     use constants, only: sigma_v, Rv, rho_w, Mw, Lv, cp, pi
     implicit none
-    
+
     ! 변수 선언
     integer, intent(in)    :: nbin, nbin_drop, i_vant
-    real(8), intent(inout) :: p, T, qv, S
-    real(8), intent(in)    :: r(nbin+1), r_center(nbin), r_center_drop(nbin_drop)
+    real(8), intent(inout) :: p, T, S
+    real(8), intent(in)    :: r(nbin+1)
     real(8), intent(inout) :: n_bin(nbin), n_bin_drop(nbin_drop)
     real(8), intent(in)    :: Ms, rho_s
-    
+
     ! 로컬 변수
-    real(8) :: a, b, ln_r0, ln_r1, ln_r2, activate_ratio, n_activated, dqc
+    real(8) :: a, b, ln_r0, ln_r1, ln_r2, activate_ratio, n_activated
     integer :: i
-    
+
     ! 콜러 상수 계산 (온도 의존)
     a = (2.0d0 * sigma_v)      / (Rv * rho_w * T)
     b = i_vant * ((rho_s * Mw) / (Ms * rho_w))
-    
-    ln_r0 = log( (a / 3.0d0) * ( (4.0d0 / (b * (S**2))) ** (1.0d0 / 3.0d0) ) )
-    
+
+    ln_r0 = log((a / 3.0d0) * ((4.0d0 / (b * (S**2))) ** (1.0d0 / 3.0d0)))
+
     ! 각 bin에 대해 임계 반경과 임계 과포화도 계산
     do i = 1, nbin
         ln_r1 = log(r(i))
         ln_r2 = log(r(i+1))
-        
+    
         ! 활성화 여부 판단
         if (S .ge. 0.0d0) then
-        
             if (ln_r0 > ln_r2) then  ! 활성화되지 않음
                 activate_ratio = 0.0d0
                 cycle
-            
             else if (ln_r0 > ln_r1) then ! 일부만 활성화
                 activate_ratio = (ln_r2 - ln_r0) / (ln_r2 - ln_r1)
-            
             else ! ln_r0 ≤ ln_r1 --> 모두 활성화
                 activate_ratio = 1.0d0
             end if
-            
-            ! 활성화된 입자의 수
-            n_activated   = n_bin(i) * activate_ratio
+    
+            ! 활성화된 입자의 수 계산
+            n_activated = min(n_bin(i), n_bin(i) * activate_ratio)
+
+            if (n_activated <= 0.0d0) then
+                exit
+            end if
+
+            ! 활성화된 입자를 drop bin으로 이동
             n_bin_drop(1) = n_bin_drop(1) + n_activated
             n_bin(i)      = n_bin(i)      - n_activated
             
-            dqc = n_activated * rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(1)**3
-            qv  = qv - dqc
-            T   = T + (Lv * dqc / cp)
-            
-            call update_saturation(p, T, qv, S)
-        
         end if
     end do
-
 end subroutine activation
+
+subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_drop, qv)
+    use constants, only: rho_w, Rv, Lv, nbin_drop, pi, cp
+    implicit none
+
+    real(8), intent(in)    :: p, dt, rho
+    real(8), intent(in)    :: n_bin_drop(nbin_drop), r_center_drop(nbin_drop)
+    real(8), intent(inout) :: T, S, qv
+    real(8), intent(inout) :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop)
+    real(8)                :: T_Celsius, e_s, Ka, Dv, Fd, Fk, dqc
+    real(8), allocatable   :: dm(:)
+    integer                :: ibin
+
+    ! 배열 할당
+    allocate(dm(nbin_drop))
+
+    ! 상수 값 계산
+    ! dqc       = 0.0d0
+    T_Celsius = T - 273.15d0
+    e_s       = 611.2d0 * exp((17.67d0 * T_Celsius) / (T_Celsius + 243.5d0))
+
+    Ka = (4.1868d0 * 1.0d-3) * (5.69d0 + 0.017d0 * T_Celsius)                ! W/m·K
+    Dv = (2.1100d0 * 1.0d-5) * ((T / 273.15d0) ** 1.94d0) * (101325.0d0 / p) ! m^2/s
+
+    Fk = ((Lv / (Rv * T)) - 1.0d0) * (Lv / (Ka * T))
+    Fd = (Rv * T) / (Dv * e_s)
+    
+    do ibin = 1, nbin_drop
+        m(ibin)     = rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(ibin)**3
+        r_new(ibin) = r_center_drop(ibin) + (S / (r_center_drop(ibin) * rho_w * (Fd + Fk))) * dt
+        m_new(ibin) = rho_w * (4.0d0 / 3.0d0) * pi * r_new(ibin)**3
+        dm(ibin)    = m_new(ibin) - m(ibin)
+    end do
+
+    ! ! 전체 수증기 질량 변화량 계산
+    dqc = dot_product(n_bin_drop, dm)
+    ! print *, dqc
+    ! ! 수증기 혼합비 업데이트 (kg/kg)
+    qv = qv - dqc
+
+    ! ! 온도 업데이트 (K)
+    T = T + (Lv * dqc) / (cp * rho)
+    ! ! print *, T
+    ! ! 포화도 업데이트
+    call update_saturation(p, T, qv, S)
+
+    ! 배열 메모리 해제
+    deallocate(dm)
+end subroutine condensation
+
+subroutine redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
+    implicit none
+
+    ! 변수 선언
+    integer                :: i, j          
+    integer, intent(in)    :: nbin_drop 
+    real(8), intent(in)    :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop), r_drop(nbin_drop+1)
+    real(8), intent(inout) :: n_bin_drop(nbin_drop)
+    real(8), intent(out)   :: n_bin_new(nbin_drop)          
+    real(8)                :: position        
+
+    n_bin_new = 0.0d0
+    
+    ! Redistribution
+    do i = 1, nbin_drop
+        do j = 1, nbin_drop
+            if ((r_new(i) >= r_drop(j)) .and. (r_new(i) < r_drop(j + 1))) then
+
+                position  = (m_new(i) - m(j)) / (m(j+1) - m(j))
+
+                ! n_bin_drop 값 업데이트
+                n_bin_new(j)     = n_bin_new(j)     + n_bin_drop(i) * (1.0d0 - position)
+                n_bin_new(j + 1) = n_bin_new(j + 1) + n_bin_drop(i) * position
+
+                exit  ! 해당 bin을 찾았으므로 루프 종료
+            end if
+        end do
+    end do
+
+    n_bin_drop = n_bin_new
+end subroutine redistribution
