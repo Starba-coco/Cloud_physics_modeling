@@ -113,10 +113,10 @@ program adiabatic_bin_model
             w = 0.0
         end if
         if (time > i_time(2)) exit
-        ! print *, "1", w
+        print *, "1", w
         ! 단열 과정
         call adiabatic_process(z, T, p, rho, w, dt)
-        ! print *, "2", w, z
+        print *, "2", w, z
         call cal_rhoa(p, T, rho)
     
         ! 상대 습도 및 과포화도 업데이트

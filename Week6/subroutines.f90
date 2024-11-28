@@ -1,8 +1,8 @@
-subroutine adiabatic_process(z, T, p, w, dt)
+subroutine adiabatic_process(z, T, p, rho, w, dt)
     use constants, only: g, cp
     implicit none
-    real(8), intent(inout) :: z, T, p, w
-    real(8), intent(in)    :: dt
+    real(8), intent(inout) :: z, T, p
+    real(8), intent(in)    :: dt, w
     real(8) :: dz, dp, rho
     print *, "w : ", w, "dt : ", dt
     dz = w * dt
@@ -10,7 +10,6 @@ subroutine adiabatic_process(z, T, p, w, dt)
     ! print *, dz
     z  = z + dz
     ! print *, z
-
 
     ! 온도 업데이트 후 밀도 계산
     call cal_rhoa(p, T, rho)
