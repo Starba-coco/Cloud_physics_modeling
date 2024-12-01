@@ -7,8 +7,7 @@
     i_time       = 1800.0d0, 3600.0d0 ! [s] 적분시간
     rmin         = 1.00D-09           ! [m] drop의 최소 크기
     rmax         = 1.00D-04           ! [m] drop의 최대 크기
-    rmin_drop    = 1.00D-09           ! [m] drop_bin의 최대 크기
-    rmax_drop    = 1.00D-04           ! [m] drop_bin의 최대 크기
-    ! qv           = 0.01093d0        ! [kg/kg] 초기 수증기 혼합비
+    rmin_drop    = 1.00D-06           ! [m] drop_bin의 최대 크기
+    rmax_drop    = 1.00D-03           ! [m] drop_bin의 최대 크기
     qv           = 0.00959d0          ! [kg/kg] 초기 수증기 혼합비
 /

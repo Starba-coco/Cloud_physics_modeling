@@ -4,18 +4,11 @@ subroutine adiabatic_process(z, T, p, rho, w, dt)
     real(8), intent(inout) :: z, T, p
     real(8), intent(in)    :: dt, w
     real(8) :: dz, dp, rho
-    print *, "w : ", w, "dt : ", dt
-    dz = w * dt
-    print *, "dz : ", dz
-    ! print *, dz
-    z  = z + dz
-    ! print *, z
 
-    ! 온도 업데이트 후 밀도 계산
-    call cal_rhoa(p, T, rho)
-    ! 온도 업데이트
+    dz = w * dt
+    z  = z + dz
     T = T - (g / cp) * dz
-    ! 압력 업데이트
+    call cal_rhoa(p, T, rho)
     dp = -rho * g * dz
     p  = p + dp
 
@@ -130,16 +123,20 @@ subroutine set_aerosol(aerosol_type, Ms, rho_s, i_vant)
     end select
 end subroutine set_aerosol
 
-subroutine write_distribution(nbin, r_center, n_bin, delta_logr)
+subroutine write_distribution(nbin, r_center, n_bin, delta_logr, time)
     implicit none
     integer, intent(in)    :: nbin
-    real(8), intent(in)    :: r_center(nbin), n_bin(nbin), delta_logr
+    real(8), intent(in)    :: r_center(nbin), n_bin(nbin), delta_logr, time
     integer                :: i, dist_unit
     real(8)                :: dlogD, diameter_nm, y_value
+    character(len=256)     :: filename
+
+    ! 파일 경로와 이름 생성
+    write(filename, '("/home/dmafytn89/study/Cloud_physics_modeling/Week6/result/distribution_", I0, "s.txt")') int(time)
 
     ! 분포 데이터를 출력하기 위한 파일 설정
     dist_unit = 20
-    open(dist_unit, file='distribution.txt', status='unknown', action='write')
+    open(dist_unit, file=filename, status='unknown', action='write')
 
     ! 헤더
     write(dist_unit, '(A)') 'Diameter(nm)    dN/dlogD * 1e-3 (cm^-3/nm)'
@@ -152,7 +149,7 @@ subroutine write_distribution(nbin, r_center, n_bin, delta_logr)
         ! 입자 지름 계산 (nm)
         diameter_nm = 2.0d0 * r_center(i) * 1.0d9
 
-        y_value = (n_bin(i) / dlogD) * 1.0d-9
+        y_value = (n_bin(i) / dlogD) * 1.0d-9  ! #/kg 단위를 #/cm^3로 변환
 
         write(dist_unit, '(E12.5, 3X, E12.5)') diameter_nm, y_value
     end do
@@ -254,6 +251,8 @@ subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_
 
     Ka = (4.1868d0 * 1.0d-3) * (5.69d0 + 0.017d0 * T_Celsius)                ! W/m·K
     Dv = (2.1100d0 * 1.0d-5) * ((T / 273.15d0) ** 1.94d0) * (101325.0d0 / p) ! m^2/s
+    ! print '(A, F10.7)', "Ka :", Ka
+    ! print '(A, F10.7)', "Dv :", Dv
 
     Fk = ((Lv / (Rv * T)) - 1.0d0) * (Lv / (Ka * T))
     Fd = (Rv * T) / (Dv * e_s)
@@ -312,3 +311,78 @@ subroutine redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_
 
     n_bin_drop = n_bin_new
 end subroutine redistribution
+
+subroutine terminal_velocity(r_new, T, P, rho, vt)  ! cm 단위로 통일해서 하기
+    use constants, only: R_dry, g, rho_w
+    implicit none
+    real(8), intent(in)  :: r_new    ! 빗방울의 반지름 (m)
+    real(8), intent(in)  :: T        ! 온도           (K)
+    real(8), intent(in)  :: P        ! 압력           (Pa)
+    real(8), intent(in)  :: rho      ! 공기의 밀도    (kg/m^3)
+    real(8), intent(out) :: vt       ! 종단속도       (m/s)
+
+    ! 지역 변수
+    real(8) :: d0, P0, eta, eta0, l, C1, Csc, g_cm
+    real(8) :: b0, b1, b2, b3, b4, b5, b6
+    real(8) :: C2, Da, X, Y, Re, Cl, C3, sigma, Bo, Np
+
+    ! 상수 정의
+    g_cm = g     * 10d2
+    d0   = r_new * 2.0d0
+    sig  = 72.75d0
+    eta0 = 0.0001818d0
+    P0   = 1013.25d0
+    T0   = 293.15d0
+    eta  = 1.818d-4
+    l    = 6.62d-8 * (eta / eta0) * (P0 / (P * 0.1d0)) * ((T / 293.15d0) ** (1.0d0 / 2.0d0))
+
+    ! 밀도 차이
+    C1 = (rho_w - rho) * g_cm / (18.0d0 * eta)
+    Csc = 1.0d0 + 2.51d0 * l / d0
+
+    ! 0.5 um <= d0 < 19 um
+    if (0.5d-6 <= d0 < 19.0d-6) then
+        Vt = C1 * Csc * d0 ** 2
+
+    ! 19 um <= d0 < 1070 um
+    else if (d0 <= 1.07d-3) then
+        b0 = -0.318657d1
+        b1 =  0.992696d0
+        b2 = -0.153193d-2
+        b3 = -0.987059d-3
+        b4 = -0.578878d-3
+        b5 =  0.855176d-4
+        b6 = -0.327815d-5
+
+        C2 = 4.0d0 * rho * (rho_w - rho) * g / (3.0d0 * mu**2)
+        Da = C2 * d0**3
+        X = log(Da)
+        Y = b0 + b1 * X + b2 * X**2 + b3 * X**3 + b4 * X**4 + b5 * X**5 + b6 * X**6
+        Re = Csc * exp(Y)
+        Vt = mu * Re / (rho * d0)
+
+    ! 1.07 mm <= d0 < 7 mm
+    else if (d0 <= 7.0d-3) then
+        b0 = -0.500015d1
+        b1 =  0.523778d1
+        b2 = -0.204914d1
+        b3 =  0.475294d0
+        b4 = -0.542819d-1
+        b5 =  0.238449d-2
+
+        Cl = -1.55d-4
+        sigma = Cl * T + 0.118d0
+        C3 = 4.0d0 * (rho_w - rho) * g / (3.0d0 * sigma)
+        Bo = C3 * d0**2
+        Np = sigma**3 * rho**2 / (mu**4 * (rho_w - rho) * g)
+        X  = log(Bo * Np**(1.0d0 / 6.0d0))
+        Y  = b0 + b1 * X + b2 * X**2 + b3 * X**3 + b4 * X**4 + b5 * X**5
+        Re = Np**(1.0d0 / 6.0d0) * exp(Y)
+        Vt = mu * Re / (rho * d0)
+
+    ! 7 mm < d0
+    else
+        Vt = 9.514606d0  ! 고정값 (지름 = 7 mm)
+    end if
+
+end subroutine terminal_velocity
