@@ -123,7 +123,7 @@ subroutine set_aerosol(aerosol_type, Ms, rho_s, i_vant)
     end select
 end subroutine set_aerosol
 
-subroutine write_distribution(nbin, r_center, n_bin, delta_logr, time)
+subroutine write_aerosol_distribution(nbin, r_center, n_bin, delta_logr, time)
     implicit none
     integer, intent(in)    :: nbin
     real(8), intent(in)    :: r_center(nbin), n_bin(nbin), delta_logr, time
@@ -155,7 +155,41 @@ subroutine write_distribution(nbin, r_center, n_bin, delta_logr, time)
     end do
 
     close(dist_unit)
-end subroutine write_distribution
+end subroutine write_aerosol_distribution
+
+subroutine write_drop_distribution(nbin_drop, r_center_drop, n_bin_drop, delta_logr_drop, time)
+    implicit none
+    integer, intent(in)    :: nbin_drop
+    real(8), intent(in)    :: r_center_drop(nbin_drop), n_bin_drop(nbin_drop), delta_logr_drop, time
+    integer                :: i, dist_unit_drop
+    real(8)                :: dlogD, diameter_nm, y_value
+    character(len=256)     :: filename
+
+    ! 파일 경로와 이름 생성
+    write(filename, '("/home/dmafytn89/study/Cloud_physics_modeling/Week6/result/drop_distribution_", I0, "s.txt")') int(time)
+
+    ! 분포 데이터를 출력하기 위한 파일 설정
+    dist_unit_drop = 30
+    open(dist_unit_drop, file=filename, status='unknown', action='write')
+
+    ! 헤더
+    write(dist_unit_drop, '(A)') 'Diameter(nm)    dN/dlogD * 1e-3 (cm^-3/nm)'
+
+    ! dlogD 계산 (상수로 계산)
+    dlogD = delta_logr_drop / log(10.0d0)  ! ln(10)으로 나누어 log10 기반으로 변환
+
+    ! 분포 데이터를 파일에 출력
+    do i = 1, nbin_drop
+        ! 입자 지름 계산 (nm)
+        diameter_nm = 2.0d0 * r_center_drop(i) * 1.0d9
+
+        y_value = (n_bin_drop(i) / dlogD) * 1.0d-9  ! #/kg 단위를 #/cm^3로 변환
+
+        write(dist_unit_drop, '(E20.10, 3X, E20.10)') diameter_nm, y_value
+    end do
+
+    close(dist_unit_drop)
+end subroutine write_drop_distribution
 
 subroutine update_saturation(p, T, qv, S)
     use constants
@@ -264,16 +298,16 @@ subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_
         dm(ibin)    = m_new(ibin) - m(ibin)
     end do
 
-    ! ! 전체 수증기 질량 변화량 계산
+    ! 전체 수증기 질량 변화량 계산
     dqc = dot_product(n_bin_drop, dm)
-    ! print *, dqc
-    ! ! 수증기 혼합비 업데이트 (kg/kg)
+
+    ! 수증기 혼합비 업데이트 (kg/kg)
     qv = qv - dqc
 
-    ! ! 온도 업데이트 (K)
+    ! 온도 업데이트 (K)
     T = T + (Lv * dqc) / (cp * rho)
-    ! ! print *, T
-    ! ! 포화도 업데이트
+
+    ! 포화도 업데이트
     call update_saturation(p, T, qv, S)
 
     ! 배열 메모리 해제
@@ -310,79 +344,103 @@ subroutine redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_
     end do
 
     n_bin_drop = n_bin_new
+
 end subroutine redistribution
 
-subroutine terminal_velocity(r_new, T, P, rho, vt)  ! cm 단위로 통일해서 하기
-    use constants, only: R_dry, g, rho_w
+subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
+    use constants, only: R_dry, g, rho_w, nbin_drop
     implicit none
-    real(8), intent(in)  :: r_new    ! 빗방울의 반지름 (m)
-    real(8), intent(in)  :: T        ! 온도           (K)
-    real(8), intent(in)  :: P        ! 압력           (Pa)
-    real(8), intent(in)  :: rho      ! 공기의 밀도    (kg/m^3)
-    real(8), intent(out) :: vt       ! 종단속도       (m/s)
+
+    ! 입력 변수
+    real(8), intent(in)    :: r_center_drop(nbin_drop)  ! 빗방울의 반지름 [m]
+    real(8), intent(in)    :: T                    ! 온도 [K]
+    real(8), intent(in)    :: P                    ! 압력 [Pa]
+    real(8), intent(in)    :: rho                  ! 공기의 밀도
+    real(8), intent(out)   :: Vt(nbin_drop)        ! 종단속도 [cm/s]
 
     ! 지역 변수
-    real(8) :: d0, P0, eta, eta0, l, C1, Csc, g_cm
+    real(8), allocatable  :: d0(:)
+    real(8) :: l, C1, Csc, eta0
     real(8) :: b0, b1, b2, b3, b4, b5, b6
     real(8) :: C2, Da, X, Y, Re, Cl, C3, sigma, Bo, Np
+    integer :: i
+    integer :: file_unit  ! 파일 단위 번호
+
+    ! 배열 할당
+    allocate(d0(nbin_drop))
+
+    ! ===== 여기에 파일 출력 코드를 추가합니다 =====
+    file_unit = 40
+    open(unit=file_unit, file='vt_output.txt', status='unknown', action='write')
+    write(file_unit, '(A)') 'Radius(m)        Vt(cm/s)'
+    ! ===========================================
 
     ! 상수 정의
-    g_cm = g     * 10d2
-    d0   = r_new * 2.0d0
-    sig  = 72.75d0
-    eta0 = 0.0001818d0
-    P0   = 1013.25d0
-    T0   = 293.15d0
-    eta  = 1.818d-4
-    l    = 6.62d-8 * (eta / eta0) * (P0 / (P * 0.1d0)) * ((T / 293.15d0) ** (1.0d0 / 2.0d0))
+    eta0 = 1.818d-5 
+    l    = 6.620d-8 * 0.018d0 * (101325d0 / P) * sqrt(T / 293.15d0)
+    C1   = (rho_w - rho) * g / (18.0d0 * eta0)
+    C2   = 4.0d0 * rho * (rho_w - rho) * g / (3.0d0 * (eta0 ** 2.0d0))
 
-    ! 밀도 차이
-    C1 = (rho_w - rho) * g_cm / (18.0d0 * eta)
-    Csc = 1.0d0 + 2.51d0 * l / d0
+    do i = 1, nbin_drop
 
-    ! 0.5 um <= d0 < 19 um
-    if (0.5d-6 <= d0 < 19.0d-6) then
-        Vt = C1 * Csc * d0 ** 2
+        d0(i) = r_center_drop(i)
+        ! print *, d0(i)
+        Csc = 1.0d0 + (2.51d0 * l / d0(i))
 
-    ! 19 um <= d0 < 1070 um
-    else if (d0 <= 1.07d-3) then
-        b0 = -0.318657d1
-        b1 =  0.992696d0
-        b2 = -0.153193d-2
-        b3 = -0.987059d-3
-        b4 = -0.578878d-3
-        b5 =  0.855176d-4
-        b6 = -0.327815d-5
+        ! 0.5 um <= d0 < 19 um
+        if (0.5d-6 <= d0(i) .and. d0(i) < 19.0d-6) then
+            Vt(i) = C1 * Csc * (d0(i)**2)
 
-        C2 = 4.0d0 * rho * (rho_w - rho) * g / (3.0d0 * mu**2)
-        Da = C2 * d0**3
-        X = log(Da)
-        Y = b0 + b1 * X + b2 * X**2 + b3 * X**3 + b4 * X**4 + b5 * X**5 + b6 * X**6
-        Re = Csc * exp(Y)
-        Vt = mu * Re / (rho * d0)
+        ! 19 um <= d0 < 1070 um
+        else if (d0(i) < 1.07d-3) then
+            b0 = -0.318657d1
+            b1 =  0.992696d0
+            b2 = -0.153193d-2
+            b3 = -0.987059d-3
+            b4 = -0.578878d-3
+            b5 =  0.855176d-4
+            b6 = -0.327815d-5
 
-    ! 1.07 mm <= d0 < 7 mm
-    else if (d0 <= 7.0d-3) then
-        b0 = -0.500015d1
-        b1 =  0.523778d1
-        b2 = -0.204914d1
-        b3 =  0.475294d0
-        b4 = -0.542819d-1
-        b5 =  0.238449d-2
+            Da    = C2 * (d0(i)**3)
+            X     = log(Da)
+            Y     = b0 + b1 * X + b2 * X**2 + b3 * X**3 + b4 * X**4 + b5 * X**5 + b6 * X**6
+            Re    = Csc * exp(Y)
+            Vt(i) = eta0 * Re / (rho * d0(i))
 
-        Cl = -1.55d-4
-        sigma = Cl * T + 0.118d0
-        C3 = 4.0d0 * (rho_w - rho) * g / (3.0d0 * sigma)
-        Bo = C3 * d0**2
-        Np = sigma**3 * rho**2 / (mu**4 * (rho_w - rho) * g)
-        X  = log(Bo * Np**(1.0d0 / 6.0d0))
-        Y  = b0 + b1 * X + b2 * X**2 + b3 * X**3 + b4 * X**4 + b5 * X**5
-        Re = Np**(1.0d0 / 6.0d0) * exp(Y)
-        Vt = mu * Re / (rho * d0)
+        ! 1070 um <= d0 < 7 mm
+        else if (d0(i) < 7.0d-3) then
+            b0 = -0.500015d1
+            b1 =  0.523778d1
+            b2 = -0.204914d1
+            b3 =  0.475294d0
+            b4 = -0.542819d-1
+            b5 =  0.238449d-2
 
-    ! 7 mm < d0
-    else
-        Vt = 9.514606d0  ! 고정값 (지름 = 7 mm)
-    end if
+            Cl    = -1.55d-4
+            sigma = Cl * T + 0.118d0
+            C3    = 4.0d0 * (rho_w - rho) * g / (3.0d0 * sigma)
+            Bo    = C3 * d0(i)**2.0d0
+            Np    = ((sigma**3.0d0) * (rho**2.0d0)) / ((eta0**4.0d0) * (rho_w - rho) * g)
+            X     = log(Bo * (Np**(1.0d0 / 6.0d0)))
+            Y     = b0 + b1 * X + b2 * X**2 + b3 * X**3 + b4 * X**4 + b5 * X**5
+            Re    = Np**(1.0d0 / 6.0d0) * exp(Y)
+            Vt(i) = eta0 * Re / (rho * d0(i))
+        else
+            Vt(i) = 9.12499177288172d0
+        end if
 
+        print *, Vt(i)
+
+        ! ===== 여기서 파일에 결과를 저장합니다 =====
+        write(file_unit, '(E15.7, 3X, E15.7)') d0(i), Vt(i)
+        ! ========================================
+    end do 
+
+    ! ===== 파일 닫기 =====
+    close(file_unit)
+    ! ====================
+
+    ! 배열 해제
+    deallocate(d0)
 end subroutine terminal_velocity
+

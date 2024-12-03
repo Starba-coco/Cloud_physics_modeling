@@ -16,7 +16,7 @@ program adiabatic_bin_model
     ! 분포 함수 및 에어로졸 특성 변수
     real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), &
                              r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:), &
-                             m(:), dm(:), m_new(:), r_new(:), n_bin_new(:)
+                             m(:), dm(:), m_new(:), r_new(:), n_bin_new(:), Vt(:)
     real(8)              :: pdf_value, dr, total_aerosols
 
     ! 출력 파일 관련 변수
@@ -48,6 +48,7 @@ program adiabatic_bin_model
 
     ! 배열 할당
     allocate(m(nbin_drop))
+    allocate(Vt(nbin_drop))
     allocate(m_new(nbin_drop))
     allocate(dm(nbin_drop))
     allocate(r(nbin+1))
@@ -78,6 +79,8 @@ program adiabatic_bin_model
     call cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
                  r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
 
+    call terminal_velocity(r_center_drop, rho, T, P, Vt)
+
     ! 각 bin마다 포함되는 입자 수 계산 (Aerosol)
     do i = 1, nbin
         call lognormal(r_center(i), pdf_value)
@@ -90,16 +93,12 @@ program adiabatic_bin_model
     total_aerosols = sum(n_bin)
 
     ! 결과 출력 파일 설정
-    open(10, file='output.txt', status='unknown', action='write')
-
-    ! 헤더 출력
+    open(10,  file='output.txt', status='unknown', action='write')
     write(10, '(A7,3X,A6,3X,A10,3X,A10,3X,A8,3X,A12,3X,A12,3X,A12)') &
          'Time(s)', 'w(m/s)', 'T(K)', 'p(Pa)', 'z(m)', 'RH(%)', 'Nd(#/kg)', 'qv(g/kg)'
 
     ! 단열 상승 과정
     do
-        time = time + dt
-
         ! i_time에 따라 w 설정
         if (time <= i_time(1)) then
             w = w_val(1)
@@ -123,16 +122,21 @@ program adiabatic_bin_model
 
         call redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
 
+        if (time == 0.0d0 .or. time == 600.0d0 .or. time == 1200.0d0 .or. time == 1800.0d0 .or. time == 2400.0d0 .or. time == 3000.0d0 .or. time == 3600.0d0 ) then
+            call write_drop_distribution(nbin_drop, r_center_drop, n_bin_drop, delta_logr_drop, time)
+        end if 
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
               time, w, T, p, z, (S+1.0d0) * 100.0d0, sum(n_bin_drop), qv
 
         if (time >= 205.0d0 .and. time <= 220.0d0) then
-            call write_distribution(nbin, r_center, n_bin, delta_logr, time)
+            call write_aerosol_distribution(nbin, r_center, n_bin, delta_logr, time)
         end if
-    
-        ! 루프 종료 조건
-        if (time > 220.0d0) exit
+
+        time = time + dt    
+        ! ! 루프 종료 조건
+        ! if (time > 220.0d0) exit
     end do
+
     close(10)
 
     ! 메모리 해제
