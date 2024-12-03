@@ -364,18 +364,14 @@ subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
     real(8) :: b0, b1, b2, b3, b4, b5, b6
     real(8) :: C2, Da, X, Y, Re, Cl, C3, sigma, Bo, Np
     integer :: i
-    integer :: file_unit  ! 파일 단위 번호
+    integer :: file_unit
 
-    ! 배열 할당
     allocate(d0(nbin_drop))
 
-    ! ===== 여기에 파일 출력 코드를 추가합니다 =====
     file_unit = 40
     open(unit=file_unit, file='vt_output.txt', status='unknown', action='write')
     write(file_unit, '(A)') 'Radius(m)        Vt(cm/s)'
-    ! ===========================================
 
-    ! 상수 정의
     eta0 = 1.818d-5 
     l    = 6.620d-8 * 0.018d0 * (101325d0 / P) * sqrt(T / 293.15d0)
     C1   = (rho_w - rho) * g / (18.0d0 * eta0)
@@ -431,16 +427,30 @@ subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
 
         print *, Vt(i)
 
-        ! ===== 여기서 파일에 결과를 저장합니다 =====
         write(file_unit, '(E15.7, 3X, E15.7)') d0(i), Vt(i)
-        ! ========================================
     end do 
 
-    ! ===== 파일 닫기 =====
     close(file_unit)
-    ! ====================
 
-    ! 배열 해제
     deallocate(d0)
 end subroutine terminal_velocity
 
+subroutine collision(r_center_drop, n_bin_drop, dt...)
+    use constants, only: nbin_drop
+    implicit none
+
+    real(8), intent(in) :: dt
+    real(8), intent(in) :: r_center_drop(:), n_bin_drop(:)
+    do i = 1, nbin_drop-1
+        do j = i+1, nbin_drop
+            dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
+            dN = min(n(i), dN)
+            dN = min(n(j), dN)
+            n(i) = n(i) - dN
+            n(j) = n(j) - dN
+            call redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
+        end do
+    end do
+
+
+end subroutine collision

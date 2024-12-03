@@ -37,6 +37,7 @@ for ploting drop distribution
 '''
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 # 데이터를 로드하고 숫자로 변환
 path = '/home/dmafytn89/study/Cloud_physics_modeling/Week6/result/'
