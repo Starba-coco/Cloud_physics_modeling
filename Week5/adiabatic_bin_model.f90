@@ -4,7 +4,7 @@ program adiabatic_bin_model
 
     ! ============================================================
     ! 변수 선언
-    integer              :: i, i_vant
+    integer              :: i, j, k, i_vant
 
     ! 시간 및 공간 변수
     real(8)              :: dt, time, z, i_time(2), w_val(2)
@@ -19,10 +19,10 @@ program adiabatic_bin_model
     real(8)              :: rs, rc, Sc, pdf_value, dr, total_aerosols, activated_drops
     real(8)              :: delta_qv, n_activated, delta_T
     real(8)              :: delta_volume, delta_mass_per_particle, delta_mass_bin, total_liquid_mass
-
+    real(8)              :: bin_start, bin_end, position
     ! 출력 파일 관련 변수
     character(len=20)    :: aerosol_type
-    integer              :: dist_unit
+    integer              :: dist_unit, nt_steps
 
     ! 에어로졸 직경 관련 변수
     real(8)              :: diameter_nm, dlogD, y_value
@@ -100,8 +100,20 @@ program adiabatic_bin_model
 
     ! 단열 상승 과정
     do
-        call update_time_and_w(time, dt, i_time, w_val, w, end_flag)
-        if (end_flag) exit
+        ! 시간 업데이트
+        time = time + dt
+
+        if (time <= 1800) then
+            w = 1.0d0
+        else if (time <= 3600) then
+            w = 0.0d0
+        else
+            exit
+        end if
+        ! call update_time_and_w(time, dt, i_time, w_val, w, end_flag)
+        ! if (end_flag) then
+        !     exit
+        ! end if
 
         ! 단열 과정
         call adiabatic_process(z, T, p, rho, w, dt)
@@ -114,32 +126,40 @@ program adiabatic_bin_model
         call activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
                         r_center, r_center_drop, Ms, rho_s, i_vant)
 
-        ! 활성화된 물방울의 질량과 반경 초기화
-        do i = 1, nbin_drop
-            if (n_bin_drop(i) > 0.0d0) then
-                r_drop(i) = r_center_drop(i)
-                m_drop(i) = (4.0d0 / 3.0d0) * pi * r_drop(i)**3 * rho_w
-            end if
-        end do
+        ! ! 활성화된 물방울의 질량과 반경 초기화
+        ! do i = 1, nbin_drop
+        !     if (n_bin_drop(i) > 0.0d0) then
+        !         r_drop(i) = r_center_drop(i)
+        !         m_drop(i) = (4.0d0 / 3.0d0) * pi * r_drop(i)**3 * rho_w
+        !     end if
+        ! end do
 
-        ! 응결 과정
-        delta_qv = 0.0d0
-        delta_T  = 0.0d0
-        total_liquid_mass = 0.0d0
+        ! call condensation_loop(T, p, S, dt, m_drop, r_drop, nbin_drop, nt_steps, rho)
+                
+        ! do i = 1, nbin_drop
+        !     if (n_bin_drop(i) > 0.0d0) then
+        !         do j = 1, nbin_drop
+        !             if (r_drop(i) >= r_drop(j) .and. r_drop(i) < r_drop(j + 1)) then
+        !                 bin_start = r_drop(j)
+        !                 bin_end   = r_drop(j + 1)
+        !                 position  = (r_drop(i) - bin_start) / (bin_end - bin_start)
+                 
+        !                 n_bin_drop(j) = 0.0d0
 
-        do i = 1, nbin_drop
-            if (n_bin_drop(i) > 0.0d0) then
-                call condensation(T, p, S, dt, m_drop(i), r_drop(i), n_bin_drop(i), rho, delta_qv, delta_T)
-                total_liquid_mass = total_liquid_mass + m_drop(i) * n_bin_drop(i)
-            end if
-        end do
-        print *, time, total_liquid_mass
-        ! 수증기 혼합비와 온도 업데이트
-        qv = qv + delta_qv
-        T  = T + delta_T
-
-        ! 과포화도 재계산
-        call update_saturation(p, T, qv, S)
+        !                 ! bin에 물방울 수 추가
+        !                 n_bin_drop(j)     = n_bin_drop(j)     + n_bin_drop(i) * (1.0d0 - position)
+        !                 n_bin_drop(j + 1) = n_bin_drop(j + 1) + n_bin_drop(i) * position
+        !                 if (j > nbin_drop) then
+        !                     ! 마지막 bin인 경우 다음 bin이 없으므로 지금 bin에 모두 추가
+        !                     n_bin_drop(j) = n_bin_drop(j) + n_bin_drop(i) * position
+        !                 end if
+                        
+        !                 exit  ! 해당 bin을 찾았으므로 루프 종료
+        !             end if
+        !         end do
+        !     end if
+        ! end do
+        
 
         ! 결과 출력 (파일로 쓰기)
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &

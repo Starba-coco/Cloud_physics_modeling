@@ -231,20 +231,17 @@ subroutine activation(p, T, qv, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
 
 end subroutine activation
 
-subroutine update_time_and_w(time, dt, i_time, w_val, w, end_flag)
+subroutine update_time_and_w(time, i_time, w_val, w, end_flag)
     implicit none
     ! 변수 선언
-    real(8), intent(inout) :: time
-    real(8), intent(in)    :: dt
-    real(8), intent(in)    :: i_time(2), w_val(2)
-    real(8), intent(out)   :: w
-    logical, intent(out)   :: end_flag
-
-    ! 시간 업데이트
-    time = time + dt
+    real(8), intent(in)    :: i_time(2), w_val(2)  ! 시간 구간 및 속도 값
+    real(8), intent(inout) :: time                 ! 현재 시간
+    real(8), intent(out)   :: w                   ! 상승 속도
+    logical, intent(out)   :: end_flag            ! 종료 플래그
 
     ! 초기화
-    w = 0.0d0
+    end_flag = .false. 
+    w = 0.0d0          
 
     ! 상승 속도 업데이트
     if (time <= i_time(1)) then
@@ -257,58 +254,54 @@ subroutine update_time_and_w(time, dt, i_time, w_val, w, end_flag)
 
 end subroutine update_time_and_w
 
-subroutine condensation(T, p, S, dt, m, r, n_particles, rho, delta_qv, delta_T)
+subroutine condensation_loop(T, p, S, dt, m, r, nbin, nt_steps, rho)
     use constants, only: pi, Rv, Lv, rho_w, cp
     implicit none
 
     ! 입력 변수
     real(8), intent(in)    :: T           ! 온도 (K)
     real(8), intent(in)    :: p           ! 압력 (Pa)
-    real(8), intent(in)    :: S           ! 과포화도
+    real(8), intent(in)    :: S(nt_steps) ! 과포화도 배열
     real(8), intent(in)    :: dt          ! 시간 간격 (s)
-    real(8), intent(in)    :: n_particles ! 해당 bin의 물방울 수 (#/kg)
+    real(8), intent(in)    :: nbin        ! 입자 수
+    integer, intent(in)    :: nt_steps    ! 시간 스텝 수
     real(8), intent(in)    :: rho         ! 공기 밀도 (kg/m^3)
 
     ! 입출력 변수
-    real(8), intent(inout) :: m           ! 물방울 질량 (kg)
-    real(8), intent(inout) :: r           ! 물방울 반경 (m)
-    real(8), intent(inout) :: delta_qv    ! 수증기 혼합비 변화량 (kg/kg)
-    real(8), intent(inout) :: delta_T     ! 온도 변화량 (K)
+    real(8), intent(inout) :: m(nbin, nt_steps) ! 물방울 질량 배열 (kg)
+    real(8), intent(inout) :: r(nbin, nt_steps) ! 물방울 반경 배열 (m)
 
     ! 지역 변수
-    real(8) :: T_Celsius  ! 섭씨 온도 (°C)
-    real(8) :: e_s        ! 포화 수증기 압력 (Pa)
-    real(8) :: Ka         ! 열전도도 (W/m·K)
-    real(8) :: Dv         ! 수증기 확산 계수 (m^2/s)
-    real(8) :: Fd         ! 확산 제한 인자
-    real(8) :: Fk         ! 열전도 제한 인자
-    real(8) :: dm         ! 개별 물방울의 질량 변화량 (kg)
-    real(8) :: delta_m    ! 해당 bin에서의 총 질량 변화량 (kg)
+    integer :: i, time_step_index  ! 입자와 시간 루프 인덱스
+    real(8) :: T_Celsius           ! 섭씨 온도 (°C)
+    real(8) :: e_s                 ! 포화 수증기 압력 (Pa)
+    real(8) :: Ka                  ! 열전도도 (W/m·K)
+    real(8) :: Dv                  ! 수증기 확산 계수 (m^2/s)
+    real(8) :: Fd                  ! 확산 제한 인자
+    real(8) :: Fk                  ! 열전도 제한 인자
+    real(8) :: dm                  ! 개별 물방울의 질량 변화량 (kg)
 
-    ! 포화 수증기 압력 계산
+    ! 상수 값 계산
     T_Celsius = T - 273.15d0
     e_s       = 611.2d0 * exp( (17.67d0 * T_Celsius) / (T_Celsius + 243.5d0) )
 
-    ! 열전도도 Ka와 확산 계수 Dv 계산
-    Ka = (4.1868d0 * 1.0d-3) * (5.69d0 + 0.017d0 * T_Celsius)    ! W/m·K
+    Ka = (4.1868d0 * 1.0d-3) * (5.69d0 + 0.017d0 * T_Celsius)                    ! W/m·K
     Dv = (2.1100d0 * 1.0d-5) * ( (T / 273.15d0) ** 1.94d0 ) * (101325.0d0 / p)   ! m^2/s
 
-    ! 확산 및 열전도 제한 인자 계산
     Fd = (rho_w * Rv * T) / (e_s * Dv)
     Fk = ((Lv * rho_w) / (Ka * T)) - ((Rv * T) / Lv) + 1.0d0
 
-    ! 개별 물방울의 질량 변화량 계산
-    dm = ((4.0d0 * pi * r * S) / (Fd + Fk)) * dt
+    ! 시간 루프
+    do time_step_index = 1, nt_steps - 1
+        ! 입자 루프
+        do i = 1, nbin
+            dm = ((4.0d0 * pi * r(i, time_step_index) * S(time_step_index)) / (Fd + Fk)) * dt
 
-    ! 물방울 질량과 반경 업데이트
-    m = m + dm
-    r = ( (3.0d0 * m) / (4.0d0 * pi * rho_w) ) ** (1.0d0 / 3.0d0)
+            m(i, time_step_index + 1) = m(i, time_step_index) + dm
+            r(i, time_step_index + 1) = ( (3.0d0 * m(i, time_step_index + 1)) / (4.0d0 * pi * rho_w) ) ** (1.0d0 / 3.0d0)
+        end do
+    end do
 
-    ! 해당 bin에서의 총 질량 변화량 계산
-    delta_m = n_particles * dm
+end subroutine condensation_loop
 
-    ! 수증기 혼합비와 온도 변화량 누적
-    delta_qv = delta_qv - delta_m / rho
-    delta_T  = delta_T + (Lv * delta_m) / cp
 
-end subroutine condensation

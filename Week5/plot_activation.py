@@ -13,7 +13,9 @@ data.columns = ['Time', 'w', 'T', 'p', 'z', 'RH', 'Activated_Drops', 'q']
 
 # 필요한 열 추출
 time = data['Time']
-activated_drops = data['Activated_Drops']
+# activated_drops = data['Activated_Drops']
+activated_drops = data['q']
+# activated_drops = data['Activated_Drops']
 
 # 플롯 그리기
 plt.figure(figsize=(10, 6))
