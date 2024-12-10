@@ -351,30 +351,26 @@ subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
     use constants, only: nbin_drop
     implicit none    
 
-    real(8), intent(in)    :: mass_new     ! 충돌로 새로 형성된 입자의 질량
-    real(8), intent(in)    :: m_drop(:)    ! 각 bin 중심 물방울 질량 배열 (이미 계산됨)
-    real(8), intent(in)    :: dN           ! 새로 생성되는 입자 수
-    real(8), intent(inout) :: n_bin_drop(:) ! 기존 bin 분포 (#/kg 또는 #/m³)
+    real(8), intent(in)    :: mass_new     
+    real(8), intent(in)    :: m_drop(nbin_drop) 
+    real(8), intent(in)    :: dN           
+    real(8), intent(inout) :: n_bin_drop(nbin_drop)
 
     integer :: j
     real(8) :: position
     real(8), dimension(nbin_drop) :: dn_new
 
-    ! 충돌로 형성되는 입자가 없으면 종료
     if (dN == 0.0d0) return
 
     dn_new = 0.0d0
 
-    ! mass_new가 가장 작은 bin보다도 작을 경우, 첫 번째 bin에 모두 할당
     if (mass_new < m_drop(1)) then
         dn_new(1) = dn_new(1) + dN
 
-    ! mass_new가 가장 큰 bin 범위보다 클 경우, 마지막 bin에 모두 할당
     else if (mass_new >= m_drop(nbin_drop)) then
         dn_new(nbin_drop) = dn_new(nbin_drop) + dN
 
     else
-        ! mass_new가 어느 두 bin 질량 범위 사이에 있는지 찾는다
         do j = 1, nbin_drop - 1
             if (mass_new >= m_drop(j) .and. mass_new < m_drop(j+1)) then
                 position    = (m_drop(j+1) - mass_new) / (m_drop(j+1)-m_drop(j))
@@ -571,12 +567,12 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     use constants, only: nbin_drop, pi, rho_w
     implicit none
     
-    real, intent(in) :: dt, rho
-    real, dimension(nbin_drop),            intent(in)    :: r_center_drop
-    real, dimension(nbin_drop, nbin_drop), intent(in)    :: k
-    real, dimension(nbin_drop),            intent(inout) :: n_bin_drop
+    real(8), intent(in) :: dt, rho
+    real(8), dimension(nbin_drop),            intent(in)    :: r_center_drop
+    real(8), dimension(nbin_drop, nbin_drop), intent(in)    :: k
+    real(8), dimension(nbin_drop),            intent(inout) :: n_bin_drop
     real(8), dimension(nbin_drop) :: m_drop
-    real(8) :: dN, m_new, total_mass
+    real(8) :: dN, mm_new, total_mass
     integer :: i, j
 
     ! r_center_drop를 이용해 bin별 중심 질량 m_drop 계산
@@ -601,11 +597,11 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
             n_bin_drop(i) = n_bin_drop(i) - dN
             n_bin_drop(j) = n_bin_drop(j) - dN
         
-            ! 충돌해서 만들어진 새 물방울 질량 m_new
-            m_new = m_drop(i) + m_drop(j)
+            ! 충돌해서 만들어진 새 물방울 질량 mm_new
+            mm_new = m_drop(i) + m_drop(j)
 
             ! 새로 형성된 물방울을 적절한 bin에 redistribution
-            call redistribution_for_collision(m_new, m_drop, dN, n_bin_drop)
+            call redistribution_for_collision(mm_new, m_drop, dN, n_bin_drop)
 
         end do
     end do

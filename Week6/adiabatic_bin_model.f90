@@ -7,7 +7,7 @@ program adiabatic_bin_model
     real(8)              :: Ms, rho_s, S, w, T, p, rho, qv
     real(8), allocatable :: r(:), r_center(:), n_bin(:), log_r(:), &
                             r_drop(:), r_center_drop(:), n_bin_drop(:), log_r_drop(:), &
-                            m(:), dm(:), m_new(:), r_new(:), n_bin_new(:), Vt(:)
+                            m(:), dm(:), m_new(:), r_new(:), n_bin_new(:), Vt(:), mm_new(:)
     real(8), allocatable :: k(:,:), ec(:,:)
     real(8)              :: pdf_value, dr, total_aerosols
     character(len=20)    :: aerosol_type
@@ -29,7 +29,7 @@ program adiabatic_bin_model
     call cal_rhoa(p, T, rho)
 
     ! Allocate arrays
-    allocate(m(nbin_drop), Vt(nbin_drop), m_new(nbin_drop), dm(nbin_drop))
+    allocate(m(nbin_drop), mm_new(nbin_drop), Vt(nbin_drop), m_new(nbin_drop), dm(nbin_drop))
     allocate(r(nbin+1), r_center(nbin), n_bin(nbin), n_bin_new(nbin_drop), log_r(nbin+1))
     allocate(r_drop(nbin_drop+1), r_new(nbin_drop), r_center_drop(nbin_drop), n_bin_drop(nbin_drop), log_r_drop(nbin_drop+1))
     allocate(k(nbin_drop, nbin_drop))
@@ -102,7 +102,7 @@ program adiabatic_bin_model
 
         call collision_kernel(r_center_drop, Vt, ec, k)
 
-        ! call collision(dt, rho, r_center_drop, n_bin_drop, k)
+        call collision(dt, rho, r_center_drop, n_bin_drop, k)
 
         time = time + dt    
     end do
@@ -110,5 +110,5 @@ program adiabatic_bin_model
     close(10)
 
     deallocate(r, r_center, n_bin, log_r, r_drop, r_center_drop, n_bin_drop, log_r_drop)
-    deallocate(m, m_new, dm, r_new, n_bin_new, Vt, k, ec)
+    deallocate(m, m_new, mm_new, dm, r_new, n_bin_new, Vt, k, ec)
 end program adiabatic_bin_model
