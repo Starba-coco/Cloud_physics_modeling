@@ -347,6 +347,50 @@ subroutine redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_
 
 end subroutine redistribution
 
+subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
+    use constants, only: nbin_drop
+    implicit none    
+
+    real(8), intent(in)    :: mass_new     ! 충돌로 새로 형성된 입자의 질량
+    real(8), intent(in)    :: m_drop(:)    ! 각 bin 중심 물방울 질량 배열 (이미 계산됨)
+    real(8), intent(in)    :: dN           ! 새로 생성되는 입자 수
+    real(8), intent(inout) :: n_bin_drop(:) ! 기존 bin 분포 (#/kg 또는 #/m³)
+
+    integer :: j
+    real(8) :: position
+    real(8), dimension(nbin_drop) :: dn_new
+
+    ! 충돌로 형성되는 입자가 없으면 종료
+    if (dN == 0.0d0) return
+
+    dn_new = 0.0d0
+
+    ! mass_new가 가장 작은 bin보다도 작을 경우, 첫 번째 bin에 모두 할당
+    if (mass_new < m_drop(1)) then
+        dn_new(1) = dn_new(1) + dN
+
+    ! mass_new가 가장 큰 bin 범위보다 클 경우, 마지막 bin에 모두 할당
+    else if (mass_new >= m_drop(nbin_drop)) then
+        dn_new(nbin_drop) = dn_new(nbin_drop) + dN
+
+    else
+        ! mass_new가 어느 두 bin 질량 범위 사이에 있는지 찾는다
+        do j = 1, nbin_drop - 1
+            if (mass_new >= m_drop(j) .and. mass_new < m_drop(j+1)) then
+                position    = (m_drop(j+1) - mass_new) / (m_drop(j+1)-m_drop(j))
+                dn_new(j)   = dn_new(j)   + dN * position
+                dn_new(j+1) = dn_new(j+1) + dN * (1.0d0 - position)
+                exit
+            end if
+        end do
+    end if
+
+    ! 새로 형성된 입자 수를 기존 분포에 반영
+    n_bin_drop = n_bin_drop + dn_new
+
+end subroutine redistribution_for_collision
+
+
 subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
     use constants, only: R_dry, g, rho_w, nbin_drop
     implicit none
@@ -425,8 +469,6 @@ subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
             Vt(i) = 9.12499177288172d0
         end if
 
-        print *, Vt(i)
-
         write(file_unit, '(E15.7, 3X, E15.7)') d0(i), Vt(i)
     end do 
 
@@ -435,22 +477,139 @@ subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
     deallocate(d0)
 end subroutine terminal_velocity
 
-subroutine collision(r_center_drop, n_bin_drop, dt...)
-    use constants, only: nbin_drop
+subroutine effic(r, r_center_drop, ec)
+    ! collision efficiencies of Hall kernel
     implicit none
+    integer, parameter :: n = 300
+    double precision, intent(in), dimension(n) :: r, r_center_drop
+    double precision, intent(out), dimension(n, n) :: ec
+    double precision, dimension(11, 21) :: ecoll
+    double precision :: rat(21), r0(11)
+    integer :: i, j, k, ir, iq
+    double precision :: rq, p, q
 
-    real(8), intent(in) :: dt
-    real(8), intent(in) :: r_center_drop(:), n_bin_drop(:)
-    do i = 1, nbin_drop-1
-        do j = i+1, nbin_drop
-            dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
-            dN = min(n(i), dN)
-            dN = min(n(j), dN)
-            n(i) = n(i) - dN
-            n(j) = n(j) - dN
-            call redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
+    ! Initialize r0 and rat
+    r0  = (/300.0d0, 200.0d0, 150.0d0, 100.0d0, 70.0d0, 60.0d0, 50.0d0, 40.0d0, 30.0d0, 20.0d0, 10.0d0/)
+    rat = (/0.0d0, 0.05d0, 0.1d0, 0.15d0, 0.2d0, 0.25d0, 0.3d0, 0.35d0, 0.4d0, 0.45d0, 0.5d0, 0.55d0, 0.6d0, 0.65d0, 0.7d0, 0.75d0, 0.8d0, 0.85d0, 0.9d0, 0.95d0, 1.0d0/)
+
+    ! Initialize ecoll
+    ecoll = reshape([ &
+    0.0d0, 0.97d0,   1.0d0,    1.0d0,    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.87d0,   0.96d0,   0.98d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.77d0,   0.93d0,   0.97d0,   0.97d0,  1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.5d0,    0.79d0,   0.91d0,   0.95d0,  0.95d0,  1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.2d0,    0.58d0,   0.75d0,   0.84d0,  0.88d0,  0.9d0,   0.92d0,  0.94d0,  0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.97d0,  1.0d0,   1.02d0,  1.04d0,  2.3d0,   4.0d0,   &
+    0.0d0, 0.05d0,   0.43d0,   0.64d0,   0.77d0,  0.84d0,  0.87d0,  0.89d0,  0.91d0,  0.91d0,  0.91d0,  0.91d0,  0.91d0,  0.91d0,  0.92d0,  0.93d0,  0.95d0,  1.0d0,   1.03d0,  1.7d0,   3.0d0,   &
+    0.0d0, 0.005d0,  0.4d0,    0.6d0,    0.7d0,   0.78d0,  0.83d0,  0.86d0,  0.88d0,  0.9d0,   0.9d0,   0.9d0,   0.9d0,   0.89d0,  0.88d0,  0.88d0,  0.89d0,  0.92d0,  1.01d0,  1.3d0,   2.3d0,   &
+    0.0d0, 0.001d0,  0.07d0,   0.28d0,   0.5d0,   0.62d0,  0.68d0,  0.74d0,  0.78d0,  0.8d0,   0.8d0,   0.8d0,   0.78d0,  0.77d0,  0.76d0,  0.77d0,  0.77d0,  0.78d0,  0.79d0,  0.95d0,  1.4d0,   &
+    0.0d0, 0.0001d0, 0.002d0,  0.02d0,   0.04d0,  0.085d0, 0.17d0,  0.27d0,  0.4d0,   0.5d0,   0.55d0,  0.58d0,  0.59d0,  0.58d0,  0.54d0,  0.51d0,  0.49d0,  0.47d0,  0.45d0,  0.47d0,  0.52d0,  &
+    0.0d0, 0.0001d0, 0.0001d0, 0.005d0,  0.016d0, 0.022d0, 0.03d0,  0.043d0, 0.052d0, 0.064d0, 0.072d0, 0.079d0, 0.082d0, 0.08d0,  0.076d0, 0.067d0, 0.057d0, 0.048d0, 0.04d0,  0.033d0, 0.027d0, &
+    0.0d0, 0.0001d0, 0.0001d0, 0.0001d0, 0.014d0, 0.017d0, 0.019d0, 0.022d0, 0.027d0, 0.03d0,  0.033d0, 0.035d0, 0.037d0, 0.038d0, 0.038d0, 0.037d0, 0.036d0, 0.035d0, 0.032d0, 0.029d0, 0.027d0], shape=[11, 21])
+
+    ! Compute collision efficiency
+    do j = 1, n
+        do i = 1, n
+            ! Check if radius exceeds 300
+            if (r(j) > 300 .or. r(i) > 300) then
+                ec(j, i) = 1.0
+                cycle
+            end if
+
+            ! Find indices for r(j)
+            ir = 1
+            do k = 2, 11
+                if (r(j) <= r0(k)) then
+                    ir = k
+                    exit
+                end if
+            end do
+
+            ! Find indices for rq
+            rq = r(i) / r(j)
+            iq = 1
+            do k = 2, 21
+                if (rq <= rat(k)) then
+                    iq = k
+                    exit
+                end if
+            end do
+
+            ! Interpolation
+            if (ir < 11 .and. iq < 21) then
+                p = (r(j) - r0(ir-1))  / (r0(ir)  - r0(ir-1))
+                q = (rq   - rat(iq-1)) / (rat(iq) - rat(iq-1))
+                ec(j, i) = (1-p)*(1-q)*ecoll(ir-1, iq-1) + p*(1-q)*ecoll(ir, iq-1) + q*(1-p)*ecoll(ir-1, iq) + p*q*ecoll(ir, iq)
+            else
+                ec(j, i) = 0.0
+            end if
         end do
     end do
+end subroutine effic
 
+subroutine collision_kernel(r_center_drop, Vt, ec, k)
+    use constants, only: nbin_drop, pi
+    implicit none
+    
+    real(8), dimension(nbin_drop),            intent(in) :: Vt
+    real(8), dimension(nbin_drop),            intent(in) :: r_center_drop
+    real(8), dimension(nbin_drop, nbin_drop), intent(in) :: ec
+    real(8), dimension(nbin_drop, nbin_drop), intent(out):: k
+    integer :: i, j
+    
+    k = 0.0d0
+
+    do i = 1, nbin_drop - 1
+        do j = i + 1, nbin_drop
+            k(i,j) = pi * (r_center_drop(i) + r_center_drop(j))**2 * abs(Vt(i) - Vt(j))
+            k(i,j) = k(i,j) * ec(i,j)
+        end do
+    end do
+    
+end subroutine collision_kernel
+
+subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
+    use constants, only: nbin_drop, pi, rho_w
+    implicit none
+    
+    real, intent(in) :: dt, rho
+    real, dimension(nbin_drop),            intent(in)    :: r_center_drop
+    real, dimension(nbin_drop, nbin_drop), intent(in)    :: k
+    real, dimension(nbin_drop),            intent(inout) :: n_bin_drop
+    real(8), dimension(nbin_drop) :: m_drop
+    real(8) :: dN, m_new, total_mass
+    integer :: i, j
+
+    ! r_center_drop를 이용해 bin별 중심 질량 m_drop 계산
+    do i = 1, nbin_drop
+        m_drop(i) = (4.0d0 / 3.0d0) * pi * (r_center_drop(i) ** 3) * rho_w
+    end do
+
+    ! #/kg -> #/m3 변환
+    n_bin_drop = n_bin_drop * rho
+
+    do i = 1, nbin_drop - 1
+        if (n_bin_drop(i) == 0.0) cycle
+
+        do j = i + 1, nbin_drop
+            if (n_bin_drop(j) == 0.0) cycle
+
+            dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
+            dN = min(n_bin_drop(i), dN)
+            dN = min(n_bin_drop(j), dN)
+        
+            ! 충돌로 i,j bin에서 dN만큼 감소
+            n_bin_drop(i) = n_bin_drop(i) - dN
+            n_bin_drop(j) = n_bin_drop(j) - dN
+        
+            ! 충돌해서 만들어진 새 물방울 질량 m_new
+            m_new = m_drop(i) + m_drop(j)
+
+            ! 새로 형성된 물방울을 적절한 bin에 redistribution
+            call redistribution_for_collision(m_new, m_drop, dN, n_bin_drop)
+
+        end do
+    end do
+    
+    n_bin_drop = n_bin_drop / rho
 
 end subroutine collision
