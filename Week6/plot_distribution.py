@@ -7,7 +7,7 @@ path = '/home/dmafytn89/study/Cloud_physics_modeling/Week6/result/'
 
 plt.figure(figsize=(10, 7))
 
-time_steps = np.arange(205, 221, 1)
+time_steps = np.arange(204, 221, 1)
 colors     = plt.cm.viridis(np.linspace(0, 1, len(time_steps)))
 
 for i, t in enumerate(time_steps):

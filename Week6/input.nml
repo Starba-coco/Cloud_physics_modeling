@@ -10,4 +10,5 @@
     rmin_drop    = 1.00D-06           ! [m] drop_bin의 최대 크기
     rmax_drop    = 1.00D-02           ! [m] drop_bin의 최대 크기
     qv           = 0.00959d0          ! [kg/kg] 초기 수증기 혼합비
+    dt           = 1.0d0              ! Time step
 /

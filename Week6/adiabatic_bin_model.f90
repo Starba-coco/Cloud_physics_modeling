@@ -16,9 +16,8 @@ program adiabatic_bin_model
     real(8)              :: rmin, rmax, rmin_drop, rmax_drop
 
     namelist /input_params/ aerosol_type, w_val, T, z, p, i_time, &
-                            rmin, rmax, qv, rmin_drop, rmax_drop
+                            rmin, rmax, qv, rmin_drop, rmax_drop, dt
 
-    dt           = 0.1d0
     time         = 0.0d0
     aerosol_type = 'NaCl'
 
@@ -47,7 +46,7 @@ program adiabatic_bin_model
     call cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
                  r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
 
-    call terminal_velocity(r_center_drop, rho, T, P, Vt)
+    call terminal_velocity(r_center_drop, rho, T, p, Vt)
 
     do i = 1, nbin
         call lognormal(r_center(i), pdf_value)
@@ -63,14 +62,7 @@ program adiabatic_bin_model
     write(10, '(A7,3X,A6,3X,A10,3X,A10,3X,A8,3X,A12,3X,A12,3X,A12)') &
          'Time(s)', 'w(m/s)', 'T(K)', 'p(Pa)', 'z(m)', 'RH(%)', 'Nd(#/kg)', 'qv(g/kg)'
 
-    ! ---- 효율 계산을 위한 호출 (예시) ----
-    ! 여기서 r_center_drop와 동일 차원의 r를 사용해야 함.
-    ! 만약 effic가 r, r_center_drop 둘 다 같은 의미의 반경 배열을 기대한다면
-    ! r_center_drop를 r로 사용하거나, 별도 배열 r_eff를 만들어 복제 가능.
-    !
-    ! 가정: effic에서는 두 배열이 같은 의미이므로 둘 다 r_center_drop 사용
-    !
-    call effic(r_center_drop, r_center_drop, ec)
+    call effic(r_center_drop, ec)
 
     do
         if (time <= i_time(1)) then
@@ -79,14 +71,23 @@ program adiabatic_bin_model
             w = w_val(2)
         end if
         if (time > i_time(2)) exit
-
+        ! print *, w
         call adiabatic_process(z, T, p, rho, w, dt)
+        ! print *, "before rhoa: ", rho
         call cal_rhoa(p, T, rho)
+        ! print *, "after  rhoa: ", rho
+        ! print *, "-------------------------"
         call update_saturation(p, T, qv, S)
+        ! print *, S
+        ! print *, "-------------------------"
 
-        call activation(p, T, S, nbin, nbin_drop, r, n_bin, n_bin_drop, Ms, rho_s, i_vant)
+        call activation(T, S, r, n_bin, n_bin_drop, Ms, rho_s, i_vant)
+        ! if (time == 205 .or. time == 206) then
+        !     print *, n_bin_drop 
+        ! end if 
         call condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_drop, qv)
-        call redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
+
+        call redistribution(m, m_new, n_bin_drop, r_new, r_drop)
 
         if (time == 0.0d0 .or. time == 600.0d0 .or. time == 1200.0d0 .or. time == 1800.0d0 .or. &
             time == 2400.0d0 .or. time == 3000.0d0 .or. time == 3600.0d0 ) then
@@ -95,16 +96,16 @@ program adiabatic_bin_model
 
         write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
               time, w, T, p, z, (S+1.0d0)*100.0d0, sum(n_bin_drop), qv
-
-        if (time >= 205.0d0 .and. time <= 220.0d0) then
+        ! print *, n_bin_drop
+        if (time >= 204.0d0 .and. time <= 220.0d0) then
             call write_aerosol_distribution(nbin, r_center, n_bin, delta_logr, time)
         end if
 
         call collision_kernel(r_center_drop, Vt, ec, k)
 
-        call collision(dt, rho, r_center_drop, n_bin_drop, k)
+        ! call collision(dt, rho, r_center_drop, n_bin_drop, k)
 
-        time = time + dt    
+        time = time + dt 
     end do
 
     close(10)

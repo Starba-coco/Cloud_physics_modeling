@@ -1,9 +1,9 @@
 subroutine adiabatic_process(z, T, p, rho, w, dt)
     use constants, only: g, cp
     implicit none
-    real(8), intent(inout) :: z, T, p
+    real(8), intent(inout) :: z, T, p, rho
     real(8), intent(in)    :: dt, w
-    real(8) :: dz, dp, rho
+    real(8) :: dz, dp
 
     dz = w * dt
     z  = z + dz
@@ -14,14 +14,13 @@ subroutine adiabatic_process(z, T, p, rho, w, dt)
 
 end subroutine adiabatic_process
 
-
 subroutine cal_rhoa(p, T, rho)
     use constants, only: R_dry
     implicit none
     real(8), intent(in)  :: p, T
     real(8), intent(out) :: rho
 
-    rho = p / (R_dry * T)                                        ! 밀도 업데이트
+    rho = p / (R_dry * T)  ! 밀도 업데이트
 
 end subroutine cal_rhoa
 
@@ -57,7 +56,9 @@ subroutine cal_bin(r, r_center, log_r, log_rmin, delta_logr, &
     ! drop_bin 중심 계산 (기하 평균)
     do i = 1, nbin_drop
         r_center_drop(i) = sqrt(r_drop(i) * r_drop(i + 1))
+        ! write(*,*) r_center_drop(i)
     end do
+
 end subroutine cal_bin
 
 subroutine lognormal(r, pdf_value)
@@ -210,23 +211,21 @@ subroutine update_saturation(p, T, qv, S)
 
 end subroutine update_saturation
 
-subroutine activation(p, T, S, nbin, nbin_drop, r, n_bin, n_bin_drop, &
-                      Ms, rho_s, i_vant)
-    use constants, only: sigma_v, Rv, rho_w, Mw, Lv, cp, pi
+subroutine activation(T, S, r, n_bin, n_bin_drop, Ms, rho_s, i_vant)
+    use constants, only: sigma_v, Rv, rho_w, Mw, Lv, cp, pi, nbin, nbin_drop
     implicit none
 
     ! 변수 선언
-    integer, intent(in)    :: nbin, nbin_drop, i_vant
-    real(8), intent(inout) :: p, T, S
+    integer, intent(in)    :: i_vant
+    real(8), intent(in)    :: T, S, Ms, rho_s
     real(8), intent(in)    :: r(nbin+1)
     real(8), intent(inout) :: n_bin(nbin), n_bin_drop(nbin_drop)
-    real(8), intent(in)    :: Ms, rho_s
 
     ! 로컬 변수
     real(8) :: a, b, ln_r0, ln_r1, ln_r2, activate_ratio, n_activated
     integer :: i
 
-    ! 콜러 상수 계산 (온도 의존)
+    ! kohler 상수 계산
     a = (2.0d0 * sigma_v)      / (Rv * rho_w * T)
     b = i_vant * ((rho_s * Mw) / (Ms * rho_w))
 
@@ -270,10 +269,10 @@ subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_
     real(8), intent(in)    :: p, dt, rho
     real(8), intent(in)    :: n_bin_drop(nbin_drop), r_center_drop(nbin_drop)
     real(8), intent(inout) :: T, S, qv
-    real(8), intent(inout) :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop)
+    real(8), intent(out) :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop)
     real(8)                :: T_Celsius, e_s, Ka, Dv, Fd, Fk, dqc
     real(8), allocatable   :: dm(:)
-    integer                :: ibin
+    integer                :: i
 
     ! 배열 할당
     allocate(dm(nbin_drop))
@@ -291,22 +290,26 @@ subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_
     Fk = ((Lv / (Rv * T)) - 1.0d0) * (Lv / (Ka * T))
     Fd = (Rv * T) / (Dv * e_s)
     
-    do ibin = 1, nbin_drop
-        m(ibin)     = rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(ibin)**3
-        r_new(ibin) = r_center_drop(ibin) + (S / (r_center_drop(ibin) * rho_w * (Fd + Fk))) * dt
-        m_new(ibin) = rho_w * (4.0d0 / 3.0d0) * pi * r_new(ibin)**3
-        dm(ibin)    = m_new(ibin) - m(ibin)
+    do i = 1, nbin_drop
+        m(i)     = rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(i)**3
+        r_new(i) = r_center_drop(i) + (S / (r_center_drop(i) * rho_w * (Fd + Fk))) * dt
+        m_new(i) = rho_w * (4.0d0 / 3.0d0) * pi * r_new(i)**3
+        dm(i)    = m_new(i) - m(i)
     end do
+    ! print *, dm
+    ! print *, "=================================="
 
     ! 전체 수증기 질량 변화량 계산
     dqc = dot_product(n_bin_drop, dm)
-
+    ! print *, dqc
     ! 수증기 혼합비 업데이트 (kg/kg)
     qv = qv - dqc
 
     ! 온도 업데이트 (K)
     T = T + (Lv * dqc) / (cp * rho)
 
+    ! =====call rhoa 가 들어가야 하는지???============
+    
     ! 포화도 업데이트
     call update_saturation(p, T, qv, S)
 
@@ -314,16 +317,15 @@ subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_
     deallocate(dm)
 end subroutine condensation
 
-subroutine redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_new)
+subroutine redistribution(m, m_new, n_bin_drop, r_new, r_drop)
+    use constants, only: nbin_drop
     implicit none
 
     ! 변수 선언
-    integer                :: i, j          
-    integer, intent(in)    :: nbin_drop 
+    integer                :: i, j
     real(8), intent(in)    :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop), r_drop(nbin_drop+1)
     real(8), intent(inout) :: n_bin_drop(nbin_drop)
-    real(8), intent(out)   :: n_bin_new(nbin_drop)          
-    real(8)                :: position        
+    real(8)                :: position, n_bin_new(nbin_drop)      
 
     n_bin_new = 0.0d0
     
@@ -333,7 +335,6 @@ subroutine redistribution(m, m_new, n_bin_drop, nbin_drop, r_new, r_drop, n_bin_
             if ((r_new(i) >= r_drop(j)) .and. (r_new(i) < r_drop(j + 1))) then
 
                 position  = (m_new(i) - m(j)) / (m(j+1) - m(j))
-
                 ! n_bin_drop 값 업데이트
                 n_bin_new(j)     = n_bin_new(j)     + n_bin_drop(i) * (1.0d0 - position)
                 n_bin_new(j + 1) = n_bin_new(j + 1) + n_bin_drop(i) * position
@@ -383,11 +384,11 @@ subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
 
     ! 새로 형성된 입자 수를 기존 분포에 반영
     n_bin_drop = n_bin_drop + dn_new
-
+    ! write(*,*) 'redistribution good'
 end subroutine redistribution_for_collision
 
 
-subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
+subroutine terminal_velocity(r_center_drop, rho, T, p, Vt)
     use constants, only: R_dry, g, rho_w, nbin_drop
     implicit none
 
@@ -473,16 +474,17 @@ subroutine terminal_velocity(r_center_drop, rho, T, P, Vt)
     deallocate(d0)
 end subroutine terminal_velocity
 
-subroutine effic(r, r_center_drop, ec)
+subroutine effic(r_center_drop, ec)
     ! collision efficiencies of Hall kernel
+    use constants, only: nbin_drop
     implicit none
-    integer, parameter :: n = 300
-    double precision, intent(in), dimension(n) :: r, r_center_drop
-    double precision, intent(out), dimension(n, n) :: ec
+    double precision, intent(in), dimension(nbin_drop) :: r_center_drop
+    double precision, intent(out), dimension(nbin_drop, nbin_drop) :: ec
     double precision, dimension(11, 21) :: ecoll
     double precision :: rat(21), r0(11)
     integer :: i, j, k, ir, iq
     double precision :: rq, p, q
+    real(8) :: r_j_um, r_i_um
 
     ! Initialize r0 and rat
     r0  = (/300.0d0, 200.0d0, 150.0d0, 100.0d0, 70.0d0, 60.0d0, 50.0d0, 40.0d0, 30.0d0, 20.0d0, 10.0d0/)
@@ -502,26 +504,36 @@ subroutine effic(r, r_center_drop, ec)
     0.0d0, 0.0001d0, 0.0001d0, 0.005d0,  0.016d0, 0.022d0, 0.03d0,  0.043d0, 0.052d0, 0.064d0, 0.072d0, 0.079d0, 0.082d0, 0.08d0,  0.076d0, 0.067d0, 0.057d0, 0.048d0, 0.04d0,  0.033d0, 0.027d0, &
     0.0d0, 0.0001d0, 0.0001d0, 0.0001d0, 0.014d0, 0.017d0, 0.019d0, 0.022d0, 0.027d0, 0.03d0,  0.033d0, 0.035d0, 0.037d0, 0.038d0, 0.038d0, 0.037d0, 0.036d0, 0.035d0, 0.032d0, 0.029d0, 0.027d0], shape=[11, 21])
 
-    ! Compute collision efficiency
-    do j = 1, n
-        do i = 1, n
-            ! Check if radius exceeds 300
-            if (r(j) > 300 .or. r(i) > 300) then
+! Compute collision efficiency
+    do j = 1, nbin_drop
+        r_j_um = r_center_drop(j) * 1.0d6  ! m -> µm
+
+        do i = 1, nbin_drop
+            ! m 단위의 r_center_drop를 µm로 변환    
+            r_i_um = r_center_drop(i) * 1.0d6  ! m -> µm
+            ! write(*,*) r_j_um, r_i_um
+            ! Check if radius exceeds 300 µm
+            if (r_j_um > 300.0d0 .or. r_i_um > 300.0d0) then
                 ec(j, i) = 1.0
                 cycle
             end if
-
-            ! Find indices for r(j)
+    
+            ! Find indices for r(j_um)
+            ! r0 배열은 11개 구간점 (300, 200, 150, ... µm)
+            ! r_j_um이 어느 r0(k) 사이에 있는지 찾아 ir 결정
             ir = 1
             do k = 2, 11
-                if (r(j) <= r0(k)) then
+                if (r_j_um <= r0(k)) then
                     ir = k
                     exit
                 end if
             end do
-
+    
             ! Find indices for rq
-            rq = r(i) / r(j)
+            ! rq = r_i_um / r_j_um (반경비)
+            ! rat 배열은 21개 구간점 (0.0, 0.05, 0.1, ..., 1.0)
+            ! rq가 어느 rat(k) 사이에 있는지 찾아 iq 결정
+            rq = r_i_um / r_j_um
             iq = 1
             do k = 2, 21
                 if (rq <= rat(k)) then
@@ -529,17 +541,26 @@ subroutine effic(r, r_center_drop, ec)
                     exit
                 end if
             end do
-
+    
             ! Interpolation
+            ! ir과 iq 구간 내라면 bilinear interpolation 수행
             if (ir < 11 .and. iq < 21) then
-                p = (r(j) - r0(ir-1))  / (r0(ir)  - r0(ir-1))
-                q = (rq   - rat(iq-1)) / (rat(iq) - rat(iq-1))
-                ec(j, i) = (1-p)*(1-q)*ecoll(ir-1, iq-1) + p*(1-q)*ecoll(ir, iq-1) + q*(1-p)*ecoll(ir-1, iq) + p*q*ecoll(ir, iq)
+                ! p: r_j_um이 r0(ir-1)와 r0(ir) 사이에서의 상대 위치
+                p = (r_j_um - r0(ir-1)) / (r0(ir) - r0(ir-1))
+                ! q: rq가 rat(iq-1)와 rat(iq) 사이에서의 상대 위치
+                q = (rq - rat(iq-1)) / (rat(iq) - rat(iq-1))
+                ! write(*,*) p, q
+                ! ecoll(ir,iq)는 표준 효율 테이블
+                ! (1-p)*(1-q), p*(1-q), q*(1-p), p*q를 가중치로 하여 2차원 보간
+                ec(j, i) = (1-p)*(1-q)*ecoll(ir-1, iq-1) + p*(1-q)*ecoll(ir, iq-1) + &
+                           q*(1-p)*ecoll(ir-1, iq)       + p*q*ecoll(ir, iq)
             else
+                ! 구간 밖이면 효율 0
                 ec(j, i) = 0.0
             end if
         end do
     end do
+    ! print *, ec
 end subroutine effic
 
 subroutine collision_kernel(r_center_drop, Vt, ec, k)
@@ -557,41 +578,67 @@ subroutine collision_kernel(r_center_drop, Vt, ec, k)
     do i = 1, nbin_drop - 1
         do j = i + 1, nbin_drop
             k(i,j) = pi * (r_center_drop(i) + r_center_drop(j))**2 * abs(Vt(i) - Vt(j))
-            k(i,j) = k(i,j) * ec(i,j)
+            ! write(*,*) k(i,j)
+            ! k(i,j) = k(i,j) * ec(i,j)
         end do
     end do
-    
+    ! write(*,*) k
+    ! open(unit=99, file="output_collision_kernel.txt", status="unknown", action="write")
+    ! write(99, '(A)') "i, j, k(i,j)"
+
+    ! do i = 1, nbin_drop - 1
+    !     do j = i + 1, nbin_drop
+    !         write(99, '(I5, 3X, I5, 3X, E12.5)') i, j, k(i,j)
+    !     end do
+    ! end do
+
+    ! close(99)
 end subroutine collision_kernel
 
 subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     use constants, only: nbin_drop, pi, rho_w
     implicit none
-    
-    real(8), intent(in) :: dt, rho
-    real(8), dimension(nbin_drop),            intent(in)    :: r_center_drop
-    real(8), dimension(nbin_drop, nbin_drop), intent(in)    :: k
-    real(8), dimension(nbin_drop),            intent(inout) :: n_bin_drop
+
+    real, intent(in) :: dt, rho
+    real, dimension(nbin_drop), intent(in) :: r_center_drop
+    real, dimension(nbin_drop, nbin_drop), intent(in) :: k
+    real, dimension(nbin_drop), intent(inout) :: n_bin_drop
+
     real(8), dimension(nbin_drop) :: m_drop
-    real(8) :: dN, mm_new, total_mass
+    real(8) :: dN, mm_new, total_mass_before, total_mass_after
     integer :: i, j
+    integer :: unit_coll
 
     ! r_center_drop를 이용해 bin별 중심 질량 m_drop 계산
     do i = 1, nbin_drop
         m_drop(i) = (4.0d0 / 3.0d0) * pi * (r_center_drop(i) ** 3) * rho_w
     end do
 
+    ! 충돌 전 총 질량/입자수 계산
+    total_mass_before = sum(n_bin_drop * m_drop)
+    ! print *, n_bin_drop
     ! #/kg -> #/m3 변환
     n_bin_drop = n_bin_drop * rho
+    mm_new = 0.0d0 
 
-    do i = 1, nbin_drop - 1
+    ! ! 충돌 전 상태 출력
+    ! unit_coll = 55
+    ! open(unit=unit_coll, file='output_collision.txt', status='unknown', action='write', position='append')
+    ! write(unit_coll, '(A)') "---- Before Collision ----"
+    ! write(unit_coll, '(A, F10.4)') 'Total mass before (kg/m^3): ', total_mass_before
+    ! write(unit_coll, '(A, F10.4)') 'Total number before (#/m^3): ', sum(n_bin_drop)
+
+    do i = 1, nbin_drop
         if (n_bin_drop(i) == 0.0) cycle
 
-        do j = i + 1, nbin_drop
+        do j = i, nbin_drop
             if (n_bin_drop(j) == 0.0) cycle
 
+            dN = 0.0d0
             dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
-            dN = min(n_bin_drop(i), dN)
-            dN = min(n_bin_drop(j), dN)
+            ! dN = min(n_bin_drop(i), dN)
+            ! dN = min(n_bin_drop(j), dN)
+            dN = min(n_bin_drop(i), n_bin_drop(j), dN)
         
             ! 충돌로 i,j bin에서 dN만큼 감소
             n_bin_drop(i) = n_bin_drop(i) - dN
@@ -599,8 +646,8 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
         
             ! 충돌해서 만들어진 새 물방울 질량 mm_new
             mm_new = m_drop(i) + m_drop(j)
-
-            ! 새로 형성된 물방울을 적절한 bin에 redistribution
+            ! write(*,*) mm_new
+            ! 새로 형성된 물방울을 적절한 bin에 재분배
             call redistribution_for_collision(mm_new, m_drop, dN, n_bin_drop)
 
         end do
@@ -608,4 +655,15 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     
     n_bin_drop = n_bin_drop / rho
 
+    ! ! 충돌 후 총 질량/입자수 계산
+    ! total_mass_after = sum(n_bin_drop * m_drop)
+    ! write(unit_coll, '(A)') "---- After Collision ----"
+    ! write(unit_coll, '(A, F10.4)') 'Total mass after (kg/kg): ', total_mass_after
+    ! write(unit_coll, '(A, F10.4)') 'Total number after (#/kg): ', sum(n_bin_drop)
+
+    ! ! 질량 보존 검사
+    ! write(unit_coll, '(A, F10.6)') 'Mass ratio after/before: ', total_mass_after / total_mass_before
+    ! write(unit_coll, *) '-----------------------------------------'
+
+    close(unit_coll)
 end subroutine collision

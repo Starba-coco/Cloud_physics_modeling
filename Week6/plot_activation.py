@@ -12,15 +12,15 @@ data.columns = ['Time', 'w', 'T', 'p', 'z', 'RH', 'Activated_Drops', 'q']
 
 # 필요한 열 추출
 time = data['Time']
-activated_drops = data['RH']
+activated_drops = data['q']
 
 # 플롯 그리기
 plt.figure(figsize=(10, 6))
 plt.plot(time, activated_drops, marker='o', linestyle='-', color='b')
 plt.xlabel('Time (s)')
-plt.xlim(150, 400)
+# plt.xlim(150, 400)
 # plt.ylim(99.5, 100.5)
-plt.ylim(99, 101)
+# plt.ylim(99, 101)
 plt.ylabel('RH (%)')
 plt.title('RH over Time')
 plt.grid(True)
