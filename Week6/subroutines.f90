@@ -269,7 +269,7 @@ subroutine condensation(T, p, S, dt, m, m_new, rho, r_new, n_bin_drop, r_center_
     real(8), intent(in)    :: p, dt, rho
     real(8), intent(in)    :: n_bin_drop(nbin_drop), r_center_drop(nbin_drop)
     real(8), intent(inout) :: T, S, qv
-    real(8), intent(out) :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop)
+    real(8), intent(out)   :: m(nbin_drop), m_new(nbin_drop), r_new(nbin_drop)
     real(8)                :: T_Celsius, e_s, Ka, Dv, Fd, Fk, dqc
     real(8), allocatable   :: dm(:)
     integer                :: i
@@ -357,11 +357,12 @@ subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
     real(8), intent(in)    :: dN           
     real(8), intent(inout) :: n_bin_drop(nbin_drop)
 
-    integer :: j
+    integer :: i
     real(8) :: position
     real(8), dimension(nbin_drop) :: dn_new
 
     if (dN == 0.0d0) return
+    if (mass_new == 0.0d0) return
 
     dn_new = 0.0d0
 
@@ -372,18 +373,18 @@ subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
         dn_new(nbin_drop) = dn_new(nbin_drop) + dN
 
     else
-        do j = 1, nbin_drop - 1
-            if (mass_new >= m_drop(j) .and. mass_new < m_drop(j+1)) then
-                position    = (m_drop(j+1) - mass_new) / (m_drop(j+1)-m_drop(j))
-                dn_new(j)   = dn_new(j)   + dN * position
-                dn_new(j+1) = dn_new(j+1) + dN * (1.0d0 - position)
+        do i = 1, nbin_drop - 1
+            if (mass_new >= m_drop(i) .and. mass_new < m_drop(i+1)) then
+                position    = (m_drop(i+1) - mass_new) / (m_drop(i+1) - m_drop(i))
+                dn_new(i)   = dn_new(i)   + dN * position
+                dn_new(i+1) = dn_new(i+1) + dN * (1.0d0 - position)
                 exit
             end if
         end do
     end if
 
     ! 새로 형성된 입자 수를 기존 분포에 반영
-    n_bin_drop = n_bin_drop + dn_new
+    n_bin_drop = dn_new
     ! write(*,*) 'redistribution good'
 end subroutine redistribution_for_collision
 
@@ -574,102 +575,74 @@ subroutine collision_kernel(r_center_drop, Vt, ec, k)
     integer :: i, j
     
     k = 0.0d0
-    ! do i = 1, nbin_drop
-    !     print *, r_center_drop(i)
-    ! end do 
+
     do i = 1, nbin_drop - 1
         do j = i + 1, nbin_drop
-            ! print *, r_center_drop
             k(i,j) = pi * (r_center_drop(i) + r_center_drop(j))**2 * abs(Vt(i) - Vt(j))
-            ! write(*,*) k(i,j)
             ! k(i,j) = k(i,j) * ec(i,j)
         end do
     end do
-    ! write(*,*) k
-    ! open(unit=99, file="output_collision_kernel.txt", status="unknown", action="write")
-    ! write(99, '(A)') "i, j, k(i,j)"
 
-    ! do i = 1, nbin_drop - 1
-    !     do j = i + 1, nbin_drop
-    !         write(99, '(I5, 3X, I5, 3X, E12.5)') i, j, k(i,j)
-    !     end do
-    ! end do
-
-    ! close(99)
 end subroutine collision_kernel
 
-subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
+subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass, m_center_drop)
     use constants, only: nbin_drop, pi, rho_w
     implicit none
 
     real(8), intent(in) :: dt, rho
-    real(8), intent(in),    dimension(nbin_drop)             :: r_center_drop
-    real(8), intent(in),    dimension(nbin_drop, nbin_drop)  :: k
-    real(8), intent(inout), dimension(nbin_drop)             :: n_bin_drop
+    real(8), intent(in),    dimension(nbin_drop)            :: r_center_drop
+    real(8), intent(in),    dimension(nbin_drop)            :: m_center_drop
+    real(8), intent(in),    dimension(nbin_drop, nbin_drop) :: k
+    real(8), intent(inout), dimension(nbin_drop)            :: n_bin_drop
+    real(8), intent(out),   dimension(nbin_drop)            :: total_mass
+    real(8), dimension(nbin_drop) :: dn_new
 
     real(8), dimension(nbin_drop) :: m_drop
     real(8) :: dN, mm_new, total_mass_before, total_mass_after
     integer :: i, j
     integer :: unit_coll
 
-    ! r_center_drop를 이용해 bin별 중심 질량 m_drop 계산
-    do i = 1, nbin_drop
-        ! print *, r_center_drop(i)
-        m_drop(i) = (4.0d0 / 3.0d0) * pi * (r_center_drop(i) ** 3) * rho_w
-        print *, m_drop(i)
-    end do
-
-    ! 충돌 전 총 질량/입자수 계산
-    ! total_mass_before = sum(n_bin_drop * m_drop)
-    ! print *, n_bin_drop
-
     ! #/kg -> #/m3 변환
     n_bin_drop = n_bin_drop * rho
-    
-    mm_new = 0.0d0 
+    total_mass = 0.0d0  
 
-    ! ! 충돌 전 상태 출력
-    ! unit_coll = 55
-    ! open(unit=unit_coll, file='output_collision.txt', status='unknown', action='write', position='append')
-    ! write(unit_coll, '(A)') "---- Before Collision ----"
-    ! write(unit_coll, '(A, F10.4)') 'Total mass before (kg/m^3): ', total_mass_before
-    ! write(unit_coll, '(A, F10.4)') 'Total number before (#/m^3): ', sum(n_bin_drop)
+    if (sum(n_bin_drop) == 0.0d0) return
 
-    do i = 1, nbin_drop
+    do i = 1, nbin_drop-1
         if (n_bin_drop(i) == 0.0) cycle
 
-        do j = i, nbin_drop
+        do j = i+1, nbin_drop
             if (n_bin_drop(j) == 0.0) cycle
-
-            dN = 0.0d0
+            ! #/kg -> #/m3 변환
+            ! n_bin_drop = n_bin_drop * rho
+            ! mm_new     = 0.0d0 
+            dn_new = 0.0d0
             dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
             dN = min(n_bin_drop(i), dN)
             dN = min(n_bin_drop(j), dN)
-            ! dN = min(n_bin_drop(i), n_bin_drop(j), dN)
-        
+            ! print *, dN
+            if (dN == 0) cycle
+
             ! 충돌로 i,j bin에서 dN만큼 감소
             n_bin_drop(i) = n_bin_drop(i) - dN
             n_bin_drop(j) = n_bin_drop(j) - dN
         
             ! 충돌해서 만들어진 새 물방울 질량 mm_new
-            mm_new = m_drop(i) + m_drop(j)
+            mm_new = m_center_drop(i) + m_center_drop(j)
+
             ! write(*,*) mm_new
             ! 새로 형성된 물방울을 적절한 bin에 재분배
-            ! call redistribution_for_collision(mm_new, m_drop, dN, n_bin_drop)
 
+            print *, dn_new
+            call redistribution_for_collision(mm_new, m_center_drop, dN, dn_new)
+            n_bin_drop = n_bin_drop + dn_new
+            ! write(*,*) n_bin_drop
         end do
     end do
-    
+
     n_bin_drop = n_bin_drop / rho
 
-    ! ! 충돌 후 총 질량/입자수 계산
-    ! total_mass_after = sum(n_bin_drop * m_drop)
-    ! write(unit_coll, '(A)') "---- After Collision ----"
-    ! write(unit_coll, '(A, F10.4)') 'Total mass after (kg/kg): ', total_mass_after
-    ! write(unit_coll, '(A, F10.4)') 'Total number after (#/kg): ', sum(n_bin_drop)
-
-    ! ! 질량 보존 검사
-    ! write(unit_coll, '(A, F10.6)') 'Mass ratio after/before: ', total_mass_after / total_mass_before
-    ! write(unit_coll, *) '-----------------------------------------'
-    close(unit_coll)
-end subroutine collision
+    total_mass = n_bin_drop * m_center_drop
+    ! print *, total_mass
+    ! print *, sum(n_bin_drop)
+end subroutine collision    
