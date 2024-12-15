@@ -98,7 +98,7 @@ program adiabatic_bin_model
         end if
 
         call collision_kernel(r_center_drop, Vt, ec, k)
-        call collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass, m_center_drop)
+        ! call collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
 
         time = time + dt 
     end do

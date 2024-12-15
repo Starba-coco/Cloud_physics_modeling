@@ -25,6 +25,7 @@ for i, t in enumerate(time_steps):
 plt.xlabel('Diameter (nm)', fontsize=14)
 plt.ylabel(r'$dN/d\log D$ (cm$^{-3}$)', fontsize=14)
 plt.title('Particle Size Distribution Over Time', fontsize=16)
+# plt.title('Particle Size Distribution', fontsize=16)
 plt.xscale('log')
 plt.grid(True, which="both", ls="--", linewidth=0.5)
 plt.legend(title='Time', fontsize=10, title_fontsize=12)
@@ -53,11 +54,11 @@ for i, t in enumerate(time_steps):
         diameter_nm = np.array([float(d) for d in data[:, 0]])     # 첫 번째 열을 숫자로 변환
         y_value = []
 
-        for val in data[:, 1]:  # 두 번째 열을 숫자로 변환
+        for val in data[:, 1]: 
             try:
-                y_value.append(float(val))  # 숫자로 변환 시도
+                y_value.append(float(val)) 
             except ValueError:
-                y_value.append(0.0)  # 변환 실패 시 0으로 설정
+                y_value.append(0.0)
 
         y_value = np.array(y_value)
 

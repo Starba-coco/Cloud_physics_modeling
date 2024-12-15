@@ -332,9 +332,10 @@ subroutine redistribution(m, m_new, n_bin_drop, r_new, r_drop)
     ! Redistribution
     do i = 1, nbin_drop
         do j = 1, nbin_drop
-            if ((r_new(i) >= r_drop(j)) .and. (r_new(i) < r_drop(j + 1))) then
+            ! if ((r_new(i) >= r_drop(j)) .and. (r_new(i) < r_drop(j + 1))) then
+            if (((m_new(i) >= m(j))) .and. (m_new(i) < m(j + 1))) then
 
-                position  = (m_new(i) - m(j)) / (m(j+1) - m(j))
+                position  = (m_new(i) - m(j)) / (m(j + 1) - m(j))
                 ! n_bin_drop 값 업데이트
                 n_bin_new(j)     = n_bin_new(j)     + n_bin_drop(i) * (1.0d0 - position)
                 n_bin_new(j + 1) = n_bin_new(j + 1) + n_bin_drop(i) * position
@@ -348,21 +349,21 @@ subroutine redistribution(m, m_new, n_bin_drop, r_new, r_drop)
 
 end subroutine redistribution
 
-subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
+subroutine redistribution_for_collision(mass_new, m_drop, dN, dn_drop)
     use constants, only: nbin_drop
     implicit none    
 
     real(8), intent(in)    :: mass_new     
     real(8), intent(in)    :: m_drop(nbin_drop) 
-    real(8), intent(in)    :: dN           
-    real(8), intent(inout) :: n_bin_drop(nbin_drop)
+    real(8), intent(in)    :: dN
+    real(8), intent(inout) :: dn_drop(nbin_drop)
 
     integer :: i
     real(8) :: position
     real(8), dimension(nbin_drop) :: dn_new
 
-    if (dN == 0.0d0) return
-    if (mass_new == 0.0d0) return
+    ! if (dN == 0.0d0) return
+    ! if (mass_new == 0.0d0) return
 
     dn_new = 0.0d0
 
@@ -384,10 +385,9 @@ subroutine redistribution_for_collision(mass_new, m_drop, dN, n_bin_drop)
     end if
 
     ! 새로 형성된 입자 수를 기존 분포에 반영
-    n_bin_drop = dn_new
+    dn_drop = dn_new
     ! write(*,*) 'redistribution good'
 end subroutine redistribution_for_collision
-
 
 subroutine terminal_velocity(r_center_drop, rho, T, p, Vt)
     use constants, only: R_dry, g, rho_w, nbin_drop
@@ -585,13 +585,12 @@ subroutine collision_kernel(r_center_drop, Vt, ec, k)
 
 end subroutine collision_kernel
 
-subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass, m_center_drop)
+subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
     use constants, only: nbin_drop, pi, rho_w
     implicit none
 
     real(8), intent(in) :: dt, rho
     real(8), intent(in),    dimension(nbin_drop)            :: r_center_drop
-    real(8), intent(in),    dimension(nbin_drop)            :: m_center_drop
     real(8), intent(in),    dimension(nbin_drop, nbin_drop) :: k
     real(8), intent(inout), dimension(nbin_drop)            :: n_bin_drop
     real(8), intent(out),   dimension(nbin_drop)            :: total_mass
@@ -604,14 +603,17 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass, m_center
 
     ! #/kg -> #/m3 변환
     n_bin_drop = n_bin_drop * rho
-    total_mass = 0.0d0  
+    total_mass = 0.0d0
 
-    if (sum(n_bin_drop) == 0.0d0) return
+    do i = 1, nbin_drop
+        m_drop(i) = rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(i)**3
+    end do 
+    ! if (sum(n_bin_drop) == 0.0d0) return
 
-    do i = 1, nbin_drop-1
+    do i = 1, nbin_drop
         if (n_bin_drop(i) == 0.0) cycle
 
-        do j = i+1, nbin_drop
+        do j = i, nbin_drop
             if (n_bin_drop(j) == 0.0) cycle
             ! #/kg -> #/m3 변환
             ! n_bin_drop = n_bin_drop * rho
@@ -621,20 +623,18 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass, m_center
             dN = min(n_bin_drop(i), dN)
             dN = min(n_bin_drop(j), dN)
             ! print *, dN
-            if (dN == 0) cycle
+            ! if (dN == 0) cycle
 
             ! 충돌로 i,j bin에서 dN만큼 감소
             n_bin_drop(i) = n_bin_drop(i) - dN
             n_bin_drop(j) = n_bin_drop(j) - dN
         
             ! 충돌해서 만들어진 새 물방울 질량 mm_new
-            mm_new = m_center_drop(i) + m_center_drop(j)
+            mm_new = m_drop(i) + m_drop(j)
 
             ! write(*,*) mm_new
             ! 새로 형성된 물방울을 적절한 bin에 재분배
-
-            print *, dn_new
-            call redistribution_for_collision(mm_new, m_center_drop, dN, dn_new)
+            call redistribution_for_collision(mm_new, m_drop, dN, dn_new)
             n_bin_drop = n_bin_drop + dn_new
             ! write(*,*) n_bin_drop
         end do
@@ -642,7 +642,7 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass, m_center
 
     n_bin_drop = n_bin_drop / rho
 
-    total_mass = n_bin_drop * m_center_drop
+    total_mass = n_bin_drop * m_drop
     ! print *, total_mass
-    ! print *, sum(n_bin_drop)
+    print *, sum(n_bin_drop)
 end subroutine collision    
