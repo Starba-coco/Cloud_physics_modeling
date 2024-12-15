@@ -574,9 +574,12 @@ subroutine collision_kernel(r_center_drop, Vt, ec, k)
     integer :: i, j
     
     k = 0.0d0
-
+    ! do i = 1, nbin_drop
+    !     print *, r_center_drop(i)
+    ! end do 
     do i = 1, nbin_drop - 1
         do j = i + 1, nbin_drop
+            ! print *, r_center_drop
             k(i,j) = pi * (r_center_drop(i) + r_center_drop(j))**2 * abs(Vt(i) - Vt(j))
             ! write(*,*) k(i,j)
             ! k(i,j) = k(i,j) * ec(i,j)
@@ -599,10 +602,10 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     use constants, only: nbin_drop, pi, rho_w
     implicit none
 
-    real, intent(in) :: dt, rho
-    real, dimension(nbin_drop),            intent(in)    :: r_center_drop
-    real, dimension(nbin_drop, nbin_drop), intent(in)    :: k
-    real, dimension(nbin_drop),            intent(inout) :: n_bin_drop
+    real(8), intent(in) :: dt, rho
+    real(8), intent(in),    dimension(nbin_drop)             :: r_center_drop
+    real(8), intent(in),    dimension(nbin_drop, nbin_drop)  :: k
+    real(8), intent(inout), dimension(nbin_drop)             :: n_bin_drop
 
     real(8), dimension(nbin_drop) :: m_drop
     real(8) :: dN, mm_new, total_mass_before, total_mass_after
@@ -611,6 +614,7 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
 
     ! r_center_drop를 이용해 bin별 중심 질량 m_drop 계산
     do i = 1, nbin_drop
+        ! print *, r_center_drop(i)
         m_drop(i) = (4.0d0 / 3.0d0) * pi * (r_center_drop(i) ** 3) * rho_w
         print *, m_drop(i)
     end do
@@ -639,9 +643,9 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
 
             dN = 0.0d0
             dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
-            ! dN = min(n_bin_drop(i), dN)
-            ! dN = min(n_bin_drop(j), dN)
-            dN = min(n_bin_drop(i), n_bin_drop(j), dN)
+            dN = min(n_bin_drop(i), dN)
+            dN = min(n_bin_drop(j), dN)
+            ! dN = min(n_bin_drop(i), n_bin_drop(j), dN)
         
             ! 충돌로 i,j bin에서 dN만큼 감소
             n_bin_drop(i) = n_bin_drop(i) - dN
@@ -651,7 +655,7 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
             mm_new = m_drop(i) + m_drop(j)
             ! write(*,*) mm_new
             ! 새로 형성된 물방울을 적절한 bin에 재분배
-            call redistribution_for_collision(mm_new, m_drop, dN, n_bin_drop)
+            ! call redistribution_for_collision(mm_new, m_drop, dN, n_bin_drop)
 
         end do
     end do
@@ -667,6 +671,5 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     ! ! 질량 보존 검사
     ! write(unit_coll, '(A, F10.6)') 'Mass ratio after/before: ', total_mass_after / total_mass_before
     ! write(unit_coll, *) '-----------------------------------------'
-
     close(unit_coll)
 end subroutine collision

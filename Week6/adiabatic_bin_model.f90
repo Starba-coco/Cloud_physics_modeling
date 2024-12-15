@@ -47,7 +47,9 @@ program adiabatic_bin_model
                  r_drop, r_center_drop, log_r_drop, log_rmin_drop, delta_logr_drop)
 
     call terminal_velocity(r_center_drop, rho, T, p, Vt)
-
+    ! do i = 1, nbin_drop
+    !     print *, Vt(i)
+    ! end do
     do i = 1, nbin
         call lognormal(r_center(i), pdf_value)
         dr       = r(i + 1) - r(i)
@@ -102,7 +104,9 @@ program adiabatic_bin_model
         end if
 
         call collision_kernel(r_center_drop, Vt, ec, k)
-
+        ! do i = 1, nbin_drop
+        !     print *, r_center_drop(i)
+        ! end do 
         call collision(dt, rho, r_center_drop, n_bin_drop, k)
 
         time = time + dt 
