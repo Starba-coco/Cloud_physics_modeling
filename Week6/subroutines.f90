@@ -478,12 +478,12 @@ subroutine effic(r_center_drop, ec)
     ! collision efficiencies of Hall kernel
     use constants, only: nbin_drop
     implicit none
-    double precision, intent(in), dimension(nbin_drop) :: r_center_drop
-    double precision, intent(out), dimension(nbin_drop, nbin_drop) :: ec
-    double precision, dimension(11, 21) :: ecoll
-    double precision :: rat(21), r0(11)
+    real(8), intent(in),  dimension(nbin_drop) :: r_center_drop
+    real(8), intent(out), dimension(nbin_drop, nbin_drop) :: ec
+    real(8), dimension(11, 21) :: ecoll
+    real(8) :: rat(21), r0(11)
     integer :: i, j, k, ir, iq
-    double precision :: rq, p, q
+    real(8) :: rq, p, q
     real(8) :: r_j_um, r_i_um
 
     ! Initialize r0 and rat
@@ -600,9 +600,9 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     implicit none
 
     real, intent(in) :: dt, rho
-    real, dimension(nbin_drop), intent(in) :: r_center_drop
-    real, dimension(nbin_drop, nbin_drop), intent(in) :: k
-    real, dimension(nbin_drop), intent(inout) :: n_bin_drop
+    real, dimension(nbin_drop),            intent(in)    :: r_center_drop
+    real, dimension(nbin_drop, nbin_drop), intent(in)    :: k
+    real, dimension(nbin_drop),            intent(inout) :: n_bin_drop
 
     real(8), dimension(nbin_drop) :: m_drop
     real(8) :: dN, mm_new, total_mass_before, total_mass_after
@@ -612,13 +612,16 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k)
     ! r_center_drop를 이용해 bin별 중심 질량 m_drop 계산
     do i = 1, nbin_drop
         m_drop(i) = (4.0d0 / 3.0d0) * pi * (r_center_drop(i) ** 3) * rho_w
+        print *, m_drop(i)
     end do
 
     ! 충돌 전 총 질량/입자수 계산
-    total_mass_before = sum(n_bin_drop * m_drop)
+    ! total_mass_before = sum(n_bin_drop * m_drop)
     ! print *, n_bin_drop
+
     ! #/kg -> #/m3 변환
     n_bin_drop = n_bin_drop * rho
+    
     mm_new = 0.0d0 
 
     ! ! 충돌 전 상태 출력

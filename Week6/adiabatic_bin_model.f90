@@ -103,7 +103,7 @@ program adiabatic_bin_model
 
         call collision_kernel(r_center_drop, Vt, ec, k)
 
-        ! call collision(dt, rho, r_center_drop, n_bin_drop, k)
+        call collision(dt, rho, r_center_drop, n_bin_drop, k)
 
         time = time + dt 
     end do
