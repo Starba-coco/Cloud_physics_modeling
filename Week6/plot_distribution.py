@@ -34,7 +34,7 @@ plt.show()
 
 #%%
 '''
-for ploting drop distribution
+for ploting drop size distribution
 '''
 
 import numpy as np

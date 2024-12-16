@@ -65,8 +65,8 @@ program adiabatic_bin_model
     total_aerosols = sum(n_bin)
 
     open(10, file='output.txt', status='unknown', action='write')
-    write(10, '(A7,3X,A6,3X,A10,3X,A10,3X,A8,3X,A12,3X,A12,3X,A12)') &
-         'Time(s)', 'w(m/s)', 'T(K)', 'p(Pa)', 'z(m)', 'RH(%)', 'Nd(#/kg)', 'qv(g/kg)'
+    write(10, '(A7,3X,A6,3X,A10,3X,A10,3X,A8,3X,A12,3X,A12,3X,A12,3X,A12)') &
+         'Time(s)', 'w(m/s)', 'T(K)', 'p(Pa)', 'z(m)', 'RH(%)', 'Nd(#/kg)', 'qv(g/kg)', 'total_mass'
 
     call effic(r_center_drop, ec)
 
@@ -90,15 +90,15 @@ program adiabatic_bin_model
             call write_drop_distribution(nbin_drop, r_center_drop, n_bin_drop, delta_logr_drop, time)
         end if 
 
-        write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,E12.4,3X,E12.4,3X,F12.6)') &
-              time, w, T, p, z, (S+1.0d0)*100.0d0, sum(n_bin_drop), qv
+        write(10, '(F7.2,3X,F6.2,3X,F10.2,3X,F10.2,3X,F8.2,3X,f12.2,3X,f15.4,3X,F12.6,3X,F12.8)') &
+              time, w, T, p, z, (S+1.0d0)*100.0d0, sum(n_bin_drop), qv, sum(total_mass)
 
         if (time >= 204.0d0 .and. time <= 220.0d0) then
             call write_aerosol_distribution(nbin, r_center, n_bin, delta_logr, time)
         end if
 
         call collision_kernel(r_center_drop, Vt, ec, k)
-        ! call collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
+        call collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
 
         time = time + dt 
     end do

@@ -374,11 +374,12 @@ subroutine redistribution_for_collision(mass_new, m_drop, dN, dn_drop)
         dn_new(nbin_drop) = dn_new(nbin_drop) + dN
 
     else
-        do i = 1, nbin_drop - 1
+        do i = 1, nbin_drop
             if (mass_new >= m_drop(i) .and. mass_new < m_drop(i+1)) then
                 position    = (m_drop(i+1) - mass_new) / (m_drop(i+1) - m_drop(i))
                 dn_new(i)   = dn_new(i)   + dN * position
                 dn_new(i+1) = dn_new(i+1) + dN * (1.0d0 - position)
+                ! print *, dn_new(i)
                 exit
             end if
         end do
@@ -489,21 +490,33 @@ subroutine effic(r_center_drop, ec)
 
     ! Initialize r0 and rat
     r0  = (/300.0d0, 200.0d0, 150.0d0, 100.0d0, 70.0d0, 60.0d0, 50.0d0, 40.0d0, 30.0d0, 20.0d0, 10.0d0/)
-    rat = (/0.0d0, 0.05d0, 0.1d0, 0.15d0, 0.2d0, 0.25d0, 0.3d0, 0.35d0, 0.4d0, 0.45d0, 0.5d0, 0.55d0, 0.6d0, 0.65d0, 0.7d0, 0.75d0, 0.8d0, 0.85d0, 0.9d0, 0.95d0, 1.0d0/)
+    rat = (/0.0d0, 0.05d0, 0.1d0, 0.15d0, 0.2d0, 0.25d0, 0.3d0, 0.35d0, 0.4d0, 0.45d0, 0.5d0, 0.55d0,&
+            0.6d0, 0.65d0, 0.7d0, 0.75d0, 0.8d0, 0.85d0, 0.9d0, 0.95d0, 1.0d0/)
 
     ! Initialize ecoll
     ecoll = reshape([ &
-    0.0d0, 0.97d0,   1.0d0,    1.0d0,    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
-    0.0d0, 0.87d0,   0.96d0,   0.98d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
-    0.0d0, 0.77d0,   0.93d0,   0.97d0,   0.97d0,  1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
-    0.0d0, 0.5d0,    0.79d0,   0.91d0,   0.95d0,  0.95d0,  1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
-    0.0d0, 0.2d0,    0.58d0,   0.75d0,   0.84d0,  0.88d0,  0.9d0,   0.92d0,  0.94d0,  0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.97d0,  1.0d0,   1.02d0,  1.04d0,  2.3d0,   4.0d0,   &
-    0.0d0, 0.05d0,   0.43d0,   0.64d0,   0.77d0,  0.84d0,  0.87d0,  0.89d0,  0.91d0,  0.91d0,  0.91d0,  0.91d0,  0.91d0,  0.91d0,  0.92d0,  0.93d0,  0.95d0,  1.0d0,   1.03d0,  1.7d0,   3.0d0,   &
-    0.0d0, 0.005d0,  0.4d0,    0.6d0,    0.7d0,   0.78d0,  0.83d0,  0.86d0,  0.88d0,  0.9d0,   0.9d0,   0.9d0,   0.9d0,   0.89d0,  0.88d0,  0.88d0,  0.89d0,  0.92d0,  1.01d0,  1.3d0,   2.3d0,   &
-    0.0d0, 0.001d0,  0.07d0,   0.28d0,   0.5d0,   0.62d0,  0.68d0,  0.74d0,  0.78d0,  0.8d0,   0.8d0,   0.8d0,   0.78d0,  0.77d0,  0.76d0,  0.77d0,  0.77d0,  0.78d0,  0.79d0,  0.95d0,  1.4d0,   &
-    0.0d0, 0.0001d0, 0.002d0,  0.02d0,   0.04d0,  0.085d0, 0.17d0,  0.27d0,  0.4d0,   0.5d0,   0.55d0,  0.58d0,  0.59d0,  0.58d0,  0.54d0,  0.51d0,  0.49d0,  0.47d0,  0.45d0,  0.47d0,  0.52d0,  &
-    0.0d0, 0.0001d0, 0.0001d0, 0.005d0,  0.016d0, 0.022d0, 0.03d0,  0.043d0, 0.052d0, 0.064d0, 0.072d0, 0.079d0, 0.082d0, 0.08d0,  0.076d0, 0.067d0, 0.057d0, 0.048d0, 0.04d0,  0.033d0, 0.027d0, &
-    0.0d0, 0.0001d0, 0.0001d0, 0.0001d0, 0.014d0, 0.017d0, 0.019d0, 0.022d0, 0.027d0, 0.03d0,  0.033d0, 0.035d0, 0.037d0, 0.038d0, 0.038d0, 0.037d0, 0.036d0, 0.035d0, 0.032d0, 0.029d0, 0.027d0], shape=[11, 21])
+    0.0d0, 0.97d0,   1.0d0,    1.0d0,    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,&
+    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.87d0,   0.96d0,   0.98d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,&
+    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.77d0,   0.93d0,   0.97d0,   0.97d0,  1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,&
+    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.5d0,    0.79d0,   0.91d0,   0.95d0,  0.95d0,  1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,&
+    1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   1.0d0,   &
+    0.0d0, 0.2d0,    0.58d0,   0.75d0,   0.84d0,  0.88d0,  0.9d0,   0.92d0,  0.94d0,  0.95d0,  0.95d0,&
+    0.95d0,  0.95d0,  0.95d0,  0.95d0,  0.97d0,  1.0d0,   1.02d0,  1.04d0,  2.3d0,   4.0d0,   &
+    0.0d0, 0.05d0,   0.43d0,   0.64d0,   0.77d0,  0.84d0,  0.87d0,  0.89d0,  0.91d0,  0.91d0,  0.91d0,&
+    0.91d0,  0.91d0,  0.91d0,  0.92d0,  0.93d0,  0.95d0,  1.0d0,   1.03d0,  1.7d0,   3.0d0,   &
+    0.0d0, 0.005d0,  0.4d0,    0.6d0,    0.7d0,   0.78d0,  0.83d0,  0.86d0,  0.88d0,  0.9d0,   0.9d0,&
+    0.9d0,   0.9d0,   0.89d0,  0.88d0,  0.88d0,  0.89d0,  0.92d0,  1.01d0,  1.3d0,   2.3d0,   &
+    0.0d0, 0.001d0,  0.07d0,   0.28d0,   0.5d0,   0.62d0,  0.68d0,  0.74d0,  0.78d0,  0.8d0,   0.8d0,&
+    0.8d0,   0.78d0,  0.77d0,  0.76d0,  0.77d0,  0.77d0,  0.78d0,  0.79d0,  0.95d0,  1.4d0,   &
+    0.0d0, 0.0001d0, 0.002d0,  0.02d0,   0.04d0,  0.085d0, 0.17d0,  0.27d0,  0.4d0,   0.5d0,   0.55d0,&
+    0.58d0,  0.59d0,  0.58d0,  0.54d0,  0.51d0,  0.49d0,  0.47d0,  0.45d0,  0.47d0,  0.52d0,  &
+    0.0d0, 0.0001d0, 0.0001d0, 0.005d0,  0.016d0, 0.022d0, 0.03d0,  0.043d0, 0.052d0, 0.064d0, 0.072d0,&
+    0.079d0, 0.082d0, 0.08d0,  0.076d0, 0.067d0, 0.057d0, 0.048d0, 0.04d0,  0.033d0, 0.027d0, &
+    0.0d0, 0.0001d0, 0.0001d0, 0.0001d0, 0.014d0, 0.017d0, 0.019d0, 0.022d0, 0.027d0, 0.03d0,  0.033d0,&
+    0.035d0, 0.037d0, 0.038d0, 0.038d0, 0.037d0, 0.036d0, 0.035d0, 0.032d0, 0.029d0, 0.027d0], shape=[11, 21])
 
 ! Compute collision efficiency
     do j = 1, nbin_drop
@@ -524,7 +537,7 @@ subroutine effic(r_center_drop, ec)
             ! r_j_um이 어느 r0(k) 사이에 있는지 찾아 ir 결정
             ir = 1
             do k = 2, 11
-                if (r_j_um <= r0(k)) then
+                if (r_j_um >= r0(k)) then
                     ir = k
                     exit
                 end if
@@ -543,25 +556,24 @@ subroutine effic(r_center_drop, ec)
                 end if
             end do
     
-            ! Interpolation
-            ! ir과 iq 구간 내라면 bilinear interpolation 수행
-            if (ir < 11 .and. iq < 21) then
-                ! p: r_j_um이 r0(ir-1)와 r0(ir) 사이에서의 상대 위치
-                p = (r_j_um - r0(ir-1)) / (r0(ir) - r0(ir-1))
-                ! q: rq가 rat(iq-1)와 rat(iq) 사이에서의 상대 위치
-                q = (rq - rat(iq-1)) / (rat(iq) - rat(iq-1))
-                ! write(*,*) p, q
-                ! ecoll(ir,iq)는 표준 효율 테이블
-                ! (1-p)*(1-q), p*(1-q), q*(1-p), p*q를 가중치로 하여 2차원 보간
-                ec(j, i) = (1-p)*(1-q)*ecoll(ir-1, iq-1) + p*(1-q)*ecoll(ir, iq-1) + &
-                           q*(1-p)*ecoll(ir-1, iq)       + p*q*ecoll(ir, iq)
+            ! Extrapolation for out-of-range cases
+            if (r_j_um > maxval(r0)) then
+                ec(j, i) = ecoll(11, iq)  ! Extrapolate using last row of r0
+            else if (r_i_um > maxval(r0)) then
+                ec(j, i) = ecoll(ir, 21)  ! Extrapolate using last column of rat
+            else if (r_j_um < minval(r0)) then
+                ec(j, i) = ecoll(1, iq)   ! Extrapolate using first row of r0
+            else if (r_i_um < minval(r0)) then
+                ec(j, i) = ecoll(ir, 1)   ! Extrapolate using first column of rat
             else
-                ! 구간 밖이면 효율 0
-                ec(j, i) = 0.0
+                ! Interpolation for values within range
+                p = (r_j_um - r0(ir-1)) / (r0(ir) - r0(ir-1))
+                q = (rq - rat(iq-1)) / (rat(iq) - rat(iq-1))
+                ec(j, i) = (1-p)*(1-q)*ecoll(ir-1, iq-1) + p*(1-q)*ecoll(ir, iq-1) + &
+                           q*(1-p)*ecoll(ir-1, iq) + p*q*ecoll(ir, iq)
             end if
         end do
     end do
-    ! print *, ec
 end subroutine effic
 
 subroutine collision_kernel(r_center_drop, Vt, ec, k)
@@ -580,6 +592,7 @@ subroutine collision_kernel(r_center_drop, Vt, ec, k)
         do j = i + 1, nbin_drop
             k(i,j) = pi * (r_center_drop(i) + r_center_drop(j))**2 * abs(Vt(i) - Vt(j))
             ! k(i,j) = k(i,j) * ec(i,j)
+            ! print *, k(i,j)
         end do
     end do
 
@@ -595,11 +608,9 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
     real(8), intent(inout), dimension(nbin_drop)            :: n_bin_drop
     real(8), intent(out),   dimension(nbin_drop)            :: total_mass
     real(8), dimension(nbin_drop) :: dn_new
-
     real(8), dimension(nbin_drop) :: m_drop
     real(8) :: dN, mm_new, total_mass_before, total_mass_after
     integer :: i, j
-    integer :: unit_coll
 
     ! #/kg -> #/m3 변환
     n_bin_drop = n_bin_drop * rho
@@ -608,21 +619,25 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
     do i = 1, nbin_drop
         m_drop(i) = rho_w * (4.0d0 / 3.0d0) * pi * r_center_drop(i)**3
     end do 
-    ! if (sum(n_bin_drop) == 0.0d0) return
+
+    if (sum(n_bin_drop) == 0.0d0) return
 
     do i = 1, nbin_drop
         if (n_bin_drop(i) == 0.0) cycle
 
         do j = i, nbin_drop
-            if (n_bin_drop(j) == 0.0) cycle
+            ! if (n_bin_drop(j) == 0.0) cycle
             ! #/kg -> #/m3 변환
             ! n_bin_drop = n_bin_drop * rho
             ! mm_new     = 0.0d0 
-            dn_new = 0.0d0
+            ! dn_new = 0.0d0
+            ! print *, k(i, j)
+            ! print *, n_bin_drop(i)
             dN = k(i, j) * n_bin_drop(i) * n_bin_drop(j) * dt
+
+            ! print *, dN
             dN = min(n_bin_drop(i), dN)
             dN = min(n_bin_drop(j), dN)
-            ! print *, dN
             ! if (dN == 0) cycle
 
             ! 충돌로 i,j bin에서 dN만큼 감소
@@ -631,8 +646,8 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
         
             ! 충돌해서 만들어진 새 물방울 질량 mm_new
             mm_new = m_drop(i) + m_drop(j)
-
             ! write(*,*) mm_new
+
             ! 새로 형성된 물방울을 적절한 bin에 재분배
             call redistribution_for_collision(mm_new, m_drop, dN, dn_new)
             n_bin_drop = n_bin_drop + dn_new
@@ -643,6 +658,7 @@ subroutine collision(dt, rho, r_center_drop, n_bin_drop, k, total_mass)
     n_bin_drop = n_bin_drop / rho
 
     total_mass = n_bin_drop * m_drop
+    print *, sum(total_mass)
     ! print *, total_mass
-    print *, sum(n_bin_drop)
-end subroutine collision    
+    ! print *, sum(n_bin_drop)
+end subroutine collision
